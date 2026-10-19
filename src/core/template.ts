@@ -47,7 +47,16 @@ table.items tr { page-break-inside: avoid; }
 .totals tr.grand td { border-top: 1pt solid #222; font-weight: 700; font-size: 11pt; }
 .note { margin-top: 5mm; padding: 2.5mm 3mm; background: #f3f3f3; border-left: 2pt solid #555; }
 .payment { margin-top: 6mm; }
-.footer { position: fixed; bottom: -14mm; left: 0; right: 0; font-size: 7pt; color: #666; display: flex; justify-content: space-between; border-top: 0.5pt solid #ccc; padding-top: 1.5mm; }
+.footer { position: fixed; bottom: 0; left: 0; right: 0; font-size: 7pt; color: #666; display: flex; justify-content: space-between; border-top: 0.5pt solid #ccc; padding-top: 1.5mm; background: #fff; }
+/* Platzhalter, der auf jeder Druckseite Raum für die fixierte Fußzeile freihält */
+table.page-frame { width: 100%; border-collapse: collapse; }
+table.page-frame > tfoot td { height: 16mm; }
+@media screen {
+  html { background: #fff; }
+  body { padding: 18mm 18mm 0 20mm; min-height: 297mm; position: relative; }
+  .footer { position: absolute; left: 20mm; right: 18mm; bottom: 10mm; }
+  table.page-frame > tfoot { display: none; }
+}
 .footer div { flex: 1; }
 `;
 
@@ -81,10 +90,10 @@ function footer(s: CompanySettings, lang: Language): string {
   return `<div class="footer"><div>${col1}</div><div>${col2}</div><div>${col3}</div></div>`;
 }
 
-function page(title: string, body: string): string {
+function page(title: string, body: string, foot: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">
-<style>${STYLE}</style></head><body>${body}</body></html>`;
+<style>${STYLE}</style></head><body><table class="page-frame"><tbody><tr><td>${body}</td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table>${foot}</body></html>`;
 }
 
 export interface RenderInput {
@@ -171,9 +180,8 @@ export function renderDocumentHtml({ doc, settings, customer, sourceNumber }: Re
   ${notes.map((n) => `<div class="note">${escapeHtml(n)}</div>`).join('')}
   ${doc.closingText ? `<div class="closing">${nl2br(doc.closingText)}</div>` : ''}
   ${payment}
-  ${settings.footerNote ? `<div class="closing">${nl2br(settings.footerNote)}</div>` : ''}
-  ${footer(settings, lang)}`;
-  return page(title, body);
+  ${settings.footerNote ? `<div class="closing">${nl2br(settings.footerNote)}</div>` : ''}`;
+  return page(title, body, footer(settings, lang));
 }
 
 export function renderDunningHtml(
@@ -208,7 +216,6 @@ export function renderDunningHtml(
   </table>
   <p>${escapeHtml(t(lang, 'reminderPayBy', { date: formatDate(record.dueDate, lang) }))}</p>
   ${settings.iban ? `<p>IBAN ${escapeHtml(settings.iban)}${settings.bic ? ` · BIC ${escapeHtml(settings.bic)}` : ''}</p>` : ''}
-  <p>${t(lang, 'regards')}<br>${escapeHtml(settings.owner || settings.name)}</p>
-  ${footer(settings, lang)}`;
-  return page(`${t(lang, titleKey)} ${doc.number}`, body);
+  <p>${t(lang, 'regards')}<br>${escapeHtml(settings.owner || settings.name)}</p>`;
+  return page(`${t(lang, titleKey)} ${doc.number}`, body, footer(settings, lang));
 }

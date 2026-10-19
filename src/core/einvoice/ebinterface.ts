@@ -21,7 +21,6 @@ function address(name: string, a: Address, email: string, contact = ''): string 
 /** Erzeugt ein ebInterface 6.1 XML (österreichischer E-Rechnungsstandard, E-Rechnung.gv.at). */
 export function toEbInterface(m: EModel): string {
   const { doc, seller, buyer } = m;
-  const lang = doc.language === 'de' ? 'ger' : 'eng';
   const delivery =
     doc.serviceDateTo && doc.serviceDateTo !== doc.serviceDateFrom
       ? `<Period><FromDate>${doc.serviceDateFrom}</FromDate><ToDate>${doc.serviceDateTo}</ToDate></Period>`
@@ -90,7 +89,7 @@ export function toEbInterface(m: EModel): string {
     : `  <PaymentMethod><NoPayment/></PaymentMethod>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns="http://www.ebinterface.at/schema/6p1/" GeneratingSystem="Rechnung Austria" DocumentType="${m.isCredit ? 'InvoiceCorrection' : 'Invoice'}" InvoiceCurrency="EUR" Language="${lang}">
+<Invoice xmlns="http://www.ebinterface.at/schema/6p1/" GeneratingSystem="Rechnung Austria" DocumentType="${m.isCredit ? 'CreditMemo' : 'Invoice'}" InvoiceCurrency="EUR" Language="${doc.language}">
   <InvoiceNumber>${xml(doc.number)}</InvoiceNumber>
   <InvoiceDate>${doc.issueDate}</InvoiceDate>${related}
   <Delivery>${delivery}</Delivery>
