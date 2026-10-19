@@ -1,0 +1,57 @@
+{
+  "name": "rechnung-austria",
+  "version": "0.1.0",
+  "description": "Rechnungs- und Angebotstool für österreichische Ein-Personen-Unternehmen (UStG, Kleinunternehmerregelung)",
+  "main": "dist/main/main.js",
+  "license": "GPL-3.0-or-later",
+  "author": "Jesse Hämmerle",
+  "scripts": {
+    "dev": "npm run build:main && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "npm run build:main && vite build",
+    "build:main": "esbuild src/main/main.ts src/preload/preload.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outdir=dist --outbase=src",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "build": {
+    "appId": "at.haemmerle.rechnung",
+    "productName": "Rechnung Austria",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.7",
+    "vitest": "^3.2.7",
+    "wait-on": "^9.5.1"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}
