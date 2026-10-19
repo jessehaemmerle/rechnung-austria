@@ -12,7 +12,7 @@ import {
   paymentState,
   saveDraft,
 } from '../src/core/documents';
-import { computeInterest, interestRate } from '../src/core/dunning';
+import { computeInterest, interestRate, interestWithPayments } from '../src/core/dunning';
 import { formatEuro, parseEuro, roundCents } from '../src/core/money';
 import { formatNumber, nextNumber, validatePattern } from '../src/core/numbering';
 import { invoicesCsv, yearReport } from '../src/core/reports';
@@ -209,10 +209,49 @@ describe('Mahnwesen', () => {
     const dun = db.documents.find((x) => x.id === d.id)!.dunning;
     expect(dun.map((x) => x.level)).toEqual([1, 2, 3]);
     expect(dun[0].fee).toBe(0);
-    expect(dun[1].fee).toBe(4000);
+    expect(dun[1].fee).toBe(1000 + 4000);
+    expect(dun[1].collectionFee).toBe(true);
     expect(dun[2].fee).toBe(1500);
     expect(dun[1].interest).toBeGreaterThan(0);
     expect(() => addDunning(db, d.id, opts, '2026-06-01')).toThrow();
+  });
+});
+
+describe('Review-Regressionen', () => {
+  it('schließt KU aus, wenn der Vorjahresumsatz über 55.000 € lag – auch bei hohem laufenden Umsatz', () => {
+    let db = setup({ small: true });
+    for (const [amount, date] of [[5_800_000, '2025-06-01'], [4_700_000, '2026-06-01']] as const) {
+      const d = invoice(db, [item({ unitPrice: amount })], { issueDate: date, serviceDateFrom: date });
+      db = finalizeDocument(saveDraft(db, d), d.id).db;
+    }
+    expect(checkSmallBusiness(db.documents, db.settings, 2026).status).toBe('exceeded');
+  });
+  it('wandelt ein Angebot nur einmal um', () => {
+    let db = setup();
+    const offer = createDraft(db, 'offer', 'c1', '2026-02-01');
+    db = saveDraft(db, { ...offer, items: [item()] });
+    db = convertOfferToInvoice(db, offer.id).db;
+    expect(() => convertOfferToInvoice(db, offer.id)).toThrow(/bereits/);
+  });
+  it('Storno verwendet die eingefrorenen Kundendaten der Originalrechnung', () => {
+    let db = setup();
+    const d = invoice(db, [item()]);
+    db = finalizeDocument(saveDraft(db, d), d.id).db;
+    db = { ...db, customers: [{ ...db.customers[0], address: { street: '', zip: '', city: '', country: 'AT' } }] };
+    const res = cancelInvoice(db, d.id, '2026-04-01');
+    expect(res.doc.customerSnapshot?.address.city).toBe('Graz');
+  });
+  it('berechnet Zinsen nach Teilzahlungen nur auf den offenen Rest', () => {
+    // 1000 € zu 36,5 %: 10 Tage voll (10 €), dann 10 Tage auf 500 € (5 €)
+    expect(interestWithPayments(100000, [{ date: '2026-01-11', amount: 50000 }], 36.5, '2026-01-01', '2026-01-21')).toBe(1500);
+  });
+  it('Entwurf speichern übernimmt keine Systemfelder', () => {
+    let db = setup();
+    const d = invoice(db, [item()], { kind: 'credit_note', payments: [{ id: 'p', date: '2026-01-01', amount: 1, note: '' }] });
+    db = saveDraft(db, d);
+    const stored = db.documents[0];
+    expect(stored.kind).toBe('invoice');
+    expect(stored.payments).toEqual([]);
   });
 });
 

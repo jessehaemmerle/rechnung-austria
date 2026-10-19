@@ -13,7 +13,7 @@ function postal(a: Address): string {
 }
 
 function taxCategory(m: EModel, category: TaxCategory, rate: number, tag = 'cac:TaxCategory'): string {
-  const reason = category !== 'S' && m.exemptionReason
+  const reason = category !== 'S' && category !== 'Z' && m.exemptionReason
     ? `\n          ${m.exemptionCode ? `<cbc:TaxExemptionReasonCode>${m.exemptionCode}</cbc:TaxExemptionReasonCode>\n          ` : ''}<cbc:TaxExemptionReason>${xml(m.exemptionReason)}</cbc:TaxExemptionReason>`
     : '';
   return `<${tag}>
@@ -78,8 +78,12 @@ export function toUbl(m: EModel): string {
     doc.serviceDateTo && doc.serviceDateTo !== doc.serviceDateFrom
       ? `<cac:InvoicePeriod><cbc:StartDate>${doc.serviceDateFrom}</cbc:StartDate><cbc:EndDate>${doc.serviceDateTo}</cbc:EndDate></cac:InvoicePeriod>`
       : '';
-  const deliveryDate = !period && doc.serviceDateFrom
-    ? `<cac:Delivery><cbc:ActualDeliveryDate>${doc.serviceDateFrom}</cbc:ActualDeliveryDate></cac:Delivery>`
+  // Bei ig. Lieferungen ist das Lieferland anzugeben (BR-IC-12)
+  const deliverTo = doc.taxCase === 'ig_delivery'
+    ? `<cac:DeliveryLocation><cac:Address><cac:Country><cbc:IdentificationCode>${xml(buyer.address.country.toUpperCase())}</cbc:IdentificationCode></cac:Country></cac:Address></cac:DeliveryLocation>`
+    : '';
+  const deliveryDate = (!period && doc.serviceDateFrom) || deliverTo
+    ? `<cac:Delivery>${!period && doc.serviceDateFrom ? `<cbc:ActualDeliveryDate>${doc.serviceDateFrom}</cbc:ActualDeliveryDate>` : ''}${deliverTo}</cac:Delivery>`
     : '';
   const billingRef = m.isCredit && m.sourceNumber
     ? `<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${xml(m.sourceNumber)}</cbc:ID><cbc:IssueDate>${m.sourceDate}</cbc:IssueDate></cac:InvoiceDocumentReference></cac:BillingReference>`
@@ -103,6 +107,7 @@ export function toUbl(m: EModel): string {
   <cac:AccountingSupplierParty>
     <cac:Party>
       ${seller.email ? `<cbc:EndpointID schemeID="EM">${xml(seller.email)}</cbc:EndpointID>` : ''}
+      ${!seller.vatId && seller.taxNumber ? `<cac:PartyIdentification><cbc:ID>${xml(seller.taxNumber)}</cbc:ID></cac:PartyIdentification>` : ''}
       <cac:PartyName><cbc:Name>${xml(seller.name)}</cbc:Name></cac:PartyName>
       ${postal(seller.address)}
       ${sellerTax}

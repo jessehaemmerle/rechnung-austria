@@ -105,6 +105,8 @@ export interface DunningRecord {
   fee: Cents;
   interest: Cents;
   dueDate: string;
+  /** true, wenn in dieser Stufe die Pauschale nach § 458 UGB verrechnet wurde */
+  collectionFee?: boolean;
 }
 
 export interface BusinessDocument {

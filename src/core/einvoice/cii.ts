@@ -15,7 +15,7 @@ function addr(a: Address): string {
 
 /** Reihenfolge laut CII-Schema: CalculatedAmount, TypeCode, ExemptionReason, BasisAmount, CategoryCode, ExemptionReasonCode, RateApplicablePercent */
 function tradeTax(m: EModel, category: TaxCategory, rate: number, header?: { net: number; vat: number }): string {
-  const exempt = category !== 'S' && !!m.exemptionReason && !!header;
+  const exempt = category !== 'S' && category !== 'Z' && !!m.exemptionReason && !!header;
   return [
     header ? `<ram:CalculatedAmount>${amt(header.vat)}</ram:CalculatedAmount>` : '',
     '<ram:TypeCode>VAT</ram:TypeCode>',
@@ -80,6 +80,7 @@ ${lines}
     <ram:ApplicableHeaderTradeAgreement>
       ${buyer.buyerReference ? `<ram:BuyerReference>${xml(buyer.buyerReference)}</ram:BuyerReference>` : ''}
       <ram:SellerTradeParty>
+        ${!seller.vatId && seller.taxNumber ? `<ram:ID>${xml(seller.taxNumber)}</ram:ID>` : ''}
         <ram:Name>${xml(seller.name)}</ram:Name>
         ${seller.owner || seller.email ? `<ram:DefinedTradeContact>${seller.owner ? `<ram:PersonName>${xml(seller.owner)}</ram:PersonName>` : ''}${seller.phone ? `<ram:TelephoneUniversalCommunication><ram:CompleteNumber>${xml(seller.phone)}</ram:CompleteNumber></ram:TelephoneUniversalCommunication>` : ''}${seller.email ? `<ram:EmailURIUniversalCommunication><ram:URIID>${xml(seller.email)}</ram:URIID></ram:EmailURIUniversalCommunication>` : ''}</ram:DefinedTradeContact>` : ''}
         ${addr(seller.address)}
@@ -95,6 +96,7 @@ ${lines}
       </ram:BuyerTradeParty>
     </ram:ApplicableHeaderTradeAgreement>
     <ram:ApplicableHeaderTradeDelivery>
+      ${doc.taxCase === 'ig_delivery' ? `<ram:ShipToTradeParty><ram:PostalTradeAddress><ram:CountryID>${xml(buyer.address.country.toUpperCase())}</ram:CountryID></ram:PostalTradeAddress></ram:ShipToTradeParty>` : ''}
       ${!period && doc.serviceDateFrom ? `<ram:ActualDeliverySupplyChainEvent><ram:OccurrenceDateTime>${date(doc.serviceDateFrom)}</ram:OccurrenceDateTime></ram:ActualDeliverySupplyChainEvent>` : ''}
     </ram:ApplicableHeaderTradeDelivery>
     <ram:ApplicableHeaderTradeSettlement>
@@ -107,7 +109,7 @@ ${lines}
       </ram:SpecifiedTradeSettlementPaymentMeans>` : ''}
 ${taxes}
       ${period}
-      ${!m.isCredit && doc.dueDate ? `<ram:SpecifiedTradePaymentTerms><ram:DueDateDateTime>${date(doc.dueDate)}</ram:DueDateDateTime></ram:SpecifiedTradePaymentTerms>` : ''}
+      ${doc.dueDate ? `<ram:SpecifiedTradePaymentTerms><ram:DueDateDateTime>${date(doc.dueDate)}</ram:DueDateDateTime></ram:SpecifiedTradePaymentTerms>` : ''}
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
         <ram:LineTotalAmount>${amt(s * m.net)}</ram:LineTotalAmount>
         <ram:TaxBasisTotalAmount>${amt(s * m.net)}</ram:TaxBasisTotalAmount>

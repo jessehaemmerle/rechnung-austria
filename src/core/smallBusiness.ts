@@ -31,7 +31,7 @@ export function revenueForYear(docs: BusinessDocument[], settings: CompanySettin
   return docs
     .filter((d) => d.kind !== 'offer' && d.status !== 'draft')
     .filter((d) => yearOf(d.serviceDateFrom || d.issueDate) === year)
-    .reduce((s, d) => s + computeTotals(d, settings).gross, 0);
+    .reduce((s, d) => s + computeTotals(d, d.companySnapshot ?? settings).gross, 0);
 }
 
 export function checkSmallBusiness(docs: BusinessDocument[], settings: CompanySettings, year: number): SmallBusinessCheck {
@@ -41,7 +41,10 @@ export function checkSmallBusiness(docs: BusinessDocument[], settings: CompanySe
   let status: SmallBusinessStatus = 'ok';
   let message = 'Umsatz liegt unter der Kleinunternehmergrenze.';
 
-  if (revenue > SMALL_BUSINESS_TOLERANCE_LIMIT) {
+  if (previousYearRevenue > SMALL_BUSINESS_LIMIT) {
+    status = 'exceeded';
+    message = 'Vorjahresumsatz über 55.000 €: Die Kleinunternehmerregelung ist in diesem Jahr nicht anwendbar.';
+  } else if (revenue > SMALL_BUSINESS_TOLERANCE_LIMIT) {
     status = 'exceeded';
     message =
       'Toleranzgrenze von 60.500 € überschritten: Ab dem Umsatz, mit dem die Grenze überschritten wurde, ist Umsatzsteuer zu verrechnen. Bitte Regelbesteuerung aktivieren und Steuerberater kontaktieren.';
@@ -52,10 +55,6 @@ export function checkSmallBusiness(docs: BusinessDocument[], settings: CompanySe
   } else if (revenue > SMALL_BUSINESS_LIMIT * 0.8) {
     status = 'approaching';
     message = 'Über 80 % der Kleinunternehmergrenze erreicht.';
-  }
-  if (status === 'ok' && previousYearRevenue > SMALL_BUSINESS_LIMIT) {
-    status = 'exceeded';
-    message = 'Vorjahresumsatz über 55.000 €: Die Kleinunternehmerregelung ist in diesem Jahr nicht anwendbar.';
   }
   return { year, revenue, previousYearRevenue, status, remaining, message };
 }

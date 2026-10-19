@@ -7,6 +7,7 @@ import type {
   BusinessDocument,
   Cents,
   CompanySettings,
+  Customer,
   Database,
   DocumentKind,
   LineItem,
@@ -80,7 +81,22 @@ function getDoc(db: Database, id: string): BusinessDocument {
 export function saveDraft(db: Database, doc: BusinessDocument): Database {
   const existing = db.documents.find((d) => d.id === doc.id);
   if (existing && existing.status !== 'draft') throw new Error('Finalisierte Dokumente können nicht mehr geändert werden.');
-  return replaceDoc(db, { ...doc, status: 'draft', number: '' });
+  // Systemfelder (Art, Bezüge, Zahlungen, Snapshots) sind nicht vom Bearbeiten änderbar.
+  const system = existing
+    ? { kind: existing.kind, sourceDocumentId: existing.sourceDocumentId, createdAt: existing.createdAt, offerStatus: existing.offerStatus }
+    : { kind: doc.kind === 'credit_note' ? ('invoice' as const) : doc.kind, sourceDocumentId: doc.sourceDocumentId, createdAt: doc.createdAt, offerStatus: doc.offerStatus };
+  return replaceDoc(db, {
+    ...doc,
+    ...system,
+    status: 'draft',
+    number: '',
+    payments: [],
+    dunning: [],
+    customerSnapshot: undefined,
+    companySnapshot: undefined,
+    cancelledById: undefined,
+    finalizedAt: undefined,
+  });
 }
 
 export function deleteDraft(db: Database, id: string): Database {
@@ -93,11 +109,16 @@ export function deleteDraft(db: Database, id: string): Database {
  * Finalisiert ein Dokument: Pflichtangaben prüfen, fortlaufende Nummer vergeben,
  * Firmen- und Kundendaten einfrieren.
  */
-export function finalizeDocument(db: Database, id: string): { db: Database; doc: BusinessDocument } {
+export function finalizeDocument(
+  db: Database,
+  id: string,
+  frozen?: { customer?: Customer; settings: CompanySettings },
+): { db: Database; doc: BusinessDocument } {
   const doc = getDoc(db, id);
   if (doc.status !== 'draft') throw new Error('Dokument ist bereits finalisiert.');
-  const customer = db.customers.find((c) => c.id === doc.customerId);
-  const issues = checkInvoice(doc, db.settings, customer);
+  const customer = frozen ? frozen.customer : db.customers.find((c) => c.id === doc.customerId);
+  const settings = frozen?.settings ?? db.settings;
+  const issues = checkInvoice(doc, settings, customer);
   if (hasErrors(issues)) {
     throw new Error(issues.filter((i) => i.level === 'error').map((i) => i.message).join('\n'));
   }
@@ -107,7 +128,7 @@ export function finalizeDocument(db: Database, id: string): { db: Database; doc:
     status: 'final',
     number,
     customerSnapshot: customer ? structuredClone(customer) : undefined,
-    companySnapshot: structuredClone(db.settings),
+    companySnapshot: structuredClone(settings),
     finalizedAt: new Date().toISOString(),
   };
   return { db: { ...replaceDoc(db, final), counters }, doc: final };
@@ -117,6 +138,8 @@ export function finalizeDocument(db: Database, id: string): { db: Database; doc:
 export function convertOfferToInvoice(db: Database, offerId: string, today = todayIso()): { db: Database; doc: BusinessDocument } {
   const offer = getDoc(db, offerId);
   if (offer.kind !== 'offer') throw new Error('Nur Angebote können in Rechnungen umgewandelt werden.');
+  if (offer.offerStatus === 'invoiced' || db.documents.some((d) => d.sourceDocumentId === offer.id && d.kind === 'invoice'))
+    throw new Error('Zu diesem Angebot gibt es bereits eine Rechnung.');
   const draft = createDraft(db, 'invoice', offer.customerId, today);
   const invoice: BusinessDocument = {
     ...draft,
@@ -162,11 +185,12 @@ export function cancelInvoice(db: Database, invoiceId: string, today = todayIso(
     finalizedAt: undefined,
     createdAt: new Date().toISOString(),
   };
-  // Der Steuerstatus (Kleinunternehmer ja/nein) der Originalrechnung muss erhalten bleiben.
-  const tmp = { ...db, settings: { ...db.settings, isSmallBusiness: settings.isSmallBusiness } };
-  const res = finalizeDocument(replaceDoc(tmp, credit), credit.id);
-  const finalDb = { ...res.db, settings: db.settings };
-  return { db: replaceDoc(finalDb, { ...inv, status: 'cancelled', cancelledById: res.doc.id }), doc: res.doc };
+  // Firmen- und Kundendaten sowie Steuerstatus der Originalrechnung bleiben erhalten;
+  // nur die Nummernmuster kommen aus den aktuellen Einstellungen.
+  const frozenSettings = { ...settings, creditNoteNumberPattern: db.settings.creditNoteNumberPattern };
+  const customer = inv.customerSnapshot ?? db.customers.find((c) => c.id === inv.customerId);
+  const res = finalizeDocument(replaceDoc(db, credit), credit.id, { customer, settings: frozenSettings });
+  return { db: replaceDoc(res.db, { ...inv, status: 'cancelled', cancelledById: res.doc.id }), doc: res.doc };
 }
 
 /** Steuer-relevante Einstellungen eines Dokuments (eingefroren bei Finalisierung). */
@@ -183,6 +207,7 @@ export function addPayment(db: Database, docId: string, payment: Omit<Payment, '
 
 export function removePayment(db: Database, docId: string, paymentId: string): Database {
   const doc = getDoc(db, docId);
+  if (doc.status !== 'final' || doc.kind !== 'invoice') throw new Error('Zahlungen können nur bei offenen Rechnungen geändert werden.');
   return replaceDoc(db, { ...doc, payments: doc.payments.filter((p) => p.id !== paymentId) });
 }
 

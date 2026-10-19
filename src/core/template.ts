@@ -1,5 +1,5 @@
 import { isSmallAmountInvoice } from './compliance';
-import { formatDate } from './dates';
+import { formatDate as rawFormatDate } from './dates';
 import { formatEuro } from './money';
 import { computeTotals, paidAmount } from './tax';
 import { kindLabel, t, type DocTextKey } from './i18n';
@@ -13,6 +13,9 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/** Datumswerte werden ebenfalls escaped (Schutz vor manipulierten Importdaten). */
+const formatDate = (iso: string, lang: Language = 'de') => escapeHtml(rawFormatDate(iso, lang));
 
 const nl2br = (s: string) => escapeHtml(s).replace(/\n/g, '<br>');
 
@@ -133,8 +136,8 @@ export function renderDocumentHtml({ doc, settings, customer, sourceNumber }: Re
       (l, i) => `<tr><td>${i + 1}</td><td>${nl2br(l.item.description)}</td>
       <td class="num">${l.item.quantity.toLocaleString(lang === 'de' ? 'de-AT' : 'en-GB')} ${escapeHtml(l.item.unit)}</td>
       <td class="num">${eur(l.item.unitPrice)}</td>
-      ${showDiscount ? `<td class="num">${l.item.discountPercent ? `${l.item.discountPercent} %` : ''}</td>` : ''}
-      ${showVatCol ? `<td class="num">${l.vatRate} %</td>` : ''}
+      ${showDiscount ? `<td class="num">${l.item.discountPercent ? `${escapeHtml(String(l.item.discountPercent))} %` : ''}</td>` : ''}
+      ${showVatCol ? `<td class="num">${escapeHtml(String(l.vatRate))} %</td>` : ''}
       <td class="num">${eur(l.net)}</td></tr>`,
     )
     .join('');

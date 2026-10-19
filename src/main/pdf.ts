@@ -5,10 +5,13 @@ import { AFRelationship, PDFDocument, PDFName } from 'pdf-lib';
 export async function htmlToPdf(html: string): Promise<Buffer> {
   const win = new BrowserWindow({
     show: false,
-    webPreferences: { javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false },
+    webPreferences: { partition: 'pdf-render', javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   try {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', (e) => e.preventDefault());
+    // Keine Netzwerkzugriffe aus dem Druckfenster – nur das eingebettete Dokument selbst
+    win.webContents.session.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*', 'file://*/*'] }, (_d, cb) => cb({ cancel: true }));
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, preferCSSPageSize: true });
   } finally {

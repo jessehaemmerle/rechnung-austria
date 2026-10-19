@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { emptyDatabase, migrateDatabase } from '../core/defaults';
+import { emptyDatabase, migrateDatabase, validateDatabase } from '../core/defaults';
 import type { Database } from '../core/types';
 
 const KEEP_BACKUPS = 60;
@@ -30,7 +30,7 @@ export class Store {
     if (!fs.existsSync(this.file)) return emptyDatabase();
     const raw = fs.readFileSync(this.file, 'utf8');
     try {
-      return migrateDatabase(JSON.parse(raw));
+      return validateDatabase(migrateDatabase(JSON.parse(raw)));
     } catch (e) {
       // Defekte Datei nicht überschreiben, sondern sichern und abbrechen
       const broken = `${this.file}.defekt-${Date.now()}`;

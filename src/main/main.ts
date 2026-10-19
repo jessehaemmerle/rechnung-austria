@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { migrateDatabase } from '../core/defaults';
+import { migrateDatabase, validateDatabase } from '../core/defaults';
 import {
   addDunning,
   addPayment,
@@ -47,7 +47,7 @@ function createWindow() {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
+  const devUrl = app.isPackaged ? undefined : process.env.VITE_DEV_SERVER_URL;
   if (devUrl) win.loadURL(devUrl);
   else win.loadFile(path.join(__dirname, '../renderer/index.html'));
 }
@@ -89,8 +89,10 @@ function eInvoiceXml(db: Database, d: BusinessDocument, format: EInvoiceFormat):
 
 type Handler = (...args: any[]) => unknown;
 function handle(channel: string, fn: Handler) {
-  ipcMain.handle(channel, async (_e, ...args) => {
+  ipcMain.handle(channel, async (e, ...args) => {
     try {
+      // Nur das eigene Hauptfenster darf die API verwenden
+      if (!win || e.sender !== win.webContents) throw new Error('Unzulässiger Aufrufer.');
       return { ok: true, value: await fn(...args) };
     } catch (e) {
       return { ok: false, error: (e as Error).message };
@@ -117,7 +119,8 @@ function registerIpc() {
   handle('customer:save', (c: Customer) =>
     mutate((db) => {
       const isNew = !c.id;
-      const nextNo = `K-${String(db.customers.length + 1).padStart(4, '0')}`;
+      const maxNo = Math.max(0, ...db.customers.map((x) => Number(x.number.replace(/\D/g, '')) || 0));
+      const nextNo = `K-${String(maxNo + 1).padStart(4, '0')}`;
       const cust = { ...c, id: c.id || newId(), number: c.number || nextNo };
       return {
         db: { ...db, customers: isNew ? [...db.customers, cust] : db.customers.map((x) => (x.id === cust.id ? cust : x)) },
@@ -241,7 +244,7 @@ function registerIpc() {
       detail: 'Vom aktuellen Stand wird vorher automatisch ein Backup erstellt.',
     });
     if (confirm.response !== 1) return false;
-    store.replace(migrateDatabase(parsed));
+    store.replace(validateDatabase(migrateDatabase(parsed)));
     return true;
   });
   handle('app:showDataFolder', () => shell.showItemInFolder(store.dataFile));

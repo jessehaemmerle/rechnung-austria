@@ -67,7 +67,7 @@ export function yearReport(db: Database, year: number): YearReport {
 function csvCell(v: string | number): string {
   const s = String(v);
   // Formel-Injection in Tabellenkalkulationen verhindern
-  const safe = /^[=+\-@\t\r]/.test(s) && !/^-?\d/.test(s) ? `'${s}` : s;
+  const safe = /^[=+\-@\t\r]/.test(s) && !/^-?\d+(,\d+)?$/.test(s) ? `'${s}` : s;
   return /[;"\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 

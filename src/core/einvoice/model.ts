@@ -3,7 +3,7 @@ import { computeTotals, paidAmount } from '../tax';
 import type { BusinessDocument, Cents, CompanySettings, Customer, VatRate } from '../types';
 
 /** EN 16931 / UNTDID 5305 Steuerkategorien */
-export type TaxCategory = 'S' | 'E' | 'AE' | 'K';
+export type TaxCategory = 'S' | 'Z' | 'E' | 'AE' | 'K';
 
 export interface EModelLine {
   position: number;
@@ -59,6 +59,8 @@ export function unitCode(unit: string): string {
 export function buildModel(doc: BusinessDocument, seller: CompanySettings, buyer: Customer, source?: BusinessDocument): EModel {
   if (doc.kind === 'offer') throw new Error('Für Angebote wird keine E-Rechnung erzeugt.');
   if (doc.status === 'draft') throw new Error('E-Rechnungen können nur aus finalisierten Rechnungen erzeugt werden.');
+  if (!seller.vatId.trim() && !seller.taxNumber.trim())
+    throw new Error('Für E-Rechnungen ist eine UID-Nummer oder Steuernummer in den Einstellungen erforderlich (EN 16931, BR-CO-26).');
   const isCredit = doc.kind === 'credit_note';
   const totals = computeTotals(doc, seller);
   const category: TaxCategory | null =
@@ -78,12 +80,12 @@ export function buildModel(doc: BusinessDocument, seller: CompanySettings, buyer
       discount: gross - net,
       net,
       rate: l.vatRate,
-      category: category ?? (l.vatRate === 0 ? 'E' : 'S'),
+      category: category ?? (l.vatRate === 0 ? 'Z' : 'S'),
     };
   });
   const groups = totals.groups.map((g) => ({
     rate: g.rate,
-    category: category ?? (g.rate === 0 ? ('E' as const) : ('S' as const)),
+    category: category ?? (g.rate === 0 ? ('Z' as const) : ('S' as const)),
     net: g.net,
     vat: g.vat,
   }));
@@ -93,6 +95,7 @@ export function buildModel(doc: BusinessDocument, seller: CompanySettings, buyer
     AE: ['Reverse Charge – Übergang der Steuerschuld auf den Leistungsempfänger', 'VATEX-EU-AE'],
     K: ['Steuerfreie innergemeinschaftliche Lieferung', 'VATEX-EU-IC'],
     S: ['', ''],
+    Z: ['', ''],
   };
   const [exemptionReason, exemptionCode] = category ? reasons[category] : ['', ''];
   return {

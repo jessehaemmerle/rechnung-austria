@@ -39,7 +39,7 @@ export function item(overrides: Partial<LineItem> = {}): LineItem {
 }
 
 export function setup(opts: { small?: boolean; customer?: Partial<Customer> } = {}): Database {
-  const db = seller(emptyDatabase(), { isSmallBusiness: opts.small ?? false, vatId: opts.small ? '' : 'ATU12345678' });
+  const db = seller(emptyDatabase(), { isSmallBusiness: opts.small ?? false, vatId: opts.small ? '' : 'ATU12345678', taxNumber: opts.small ? '12 345/6789' : '' });
   return { ...db, customers: [customer(opts.customer)] };
 }
 

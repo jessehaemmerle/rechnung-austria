@@ -20,6 +20,25 @@ export function computeInterest(principal: Cents, ratePercent: number, fromIso: 
   return roundCents((principal * ratePercent * days) / 100 / 365);
 }
 
+/**
+ * Verzugszinsen auf den jeweils offenen Betrag: Teilzahlungen verringern die
+ * Zinsbasis ab dem Zahlungstag.
+ */
+export function interestWithPayments(gross: Cents, payments: { date: string; amount: Cents }[], ratePercent: number, dueIso: string, toIso: string): Cents {
+  let open = gross;
+  let from = dueIso;
+  let total = 0;
+  for (const p of [...payments].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (p.date >= toIso) break;
+    if (p.date > from) {
+      total += computeInterest(Math.max(0, open), ratePercent, from, p.date);
+      from = p.date;
+    }
+    open -= p.amount;
+  }
+  return total + computeInterest(Math.max(0, open), ratePercent, from, toIso);
+}
+
 export function isOverdue(doc: BusinessDocument, settings: CompanySettings, today: string): boolean {
   return (
     doc.kind === 'invoice' &&
@@ -52,17 +71,16 @@ export function createDunning(
   if (!level) throw new Error('Es wurden bereits alle drei Mahnstufen erstellt.');
   if (!isOverdue(doc, settings, today)) throw new Error('Rechnung ist nicht überfällig.');
 
-  const principal = computeTotals(doc, settings).gross - paidAmount(doc);
+  const gross = computeTotals(doc, settings).gross;
   const alreadyCharged = doc.dunning.reduce((s, d) => s + d.interest, 0);
   const interest =
     options.chargeInterest && level > 1
-      ? Math.max(0, computeInterest(principal, interestRate(customer, settings.baseInterestRate), doc.dueDate, today) - alreadyCharged)
+      ? Math.max(0, interestWithPayments(gross, doc.payments, interestRate(customer, settings.baseInterestRate), doc.dueDate, today) - alreadyCharged)
       : 0;
 
   let fee = settings.dunningFees[level - 1] ?? 0;
-  const collectionFeeCharged = doc.dunning.some((d) => d.fee >= B2B_COLLECTION_FEE);
-  if (customer?.isBusiness && options.applyCollectionFee && level > 1 && !collectionFeeCharged) {
-    fee = Math.max(fee, B2B_COLLECTION_FEE);
-  }
-  return { level, date: today, fee, interest, dueDate: addDays(today, settings.dunningDays[level - 1] ?? 14) };
+  // Die Pauschale nach § 458 UGB wird einmalig zusätzlich zu den Mahnspesen verrechnet.
+  const collectionFee = !!customer?.isBusiness && options.applyCollectionFee && level > 1 && !doc.dunning.some((d) => d.collectionFee);
+  if (collectionFee) fee += B2B_COLLECTION_FEE;
+  return { level, date: today, fee, interest, dueDate: addDays(today, settings.dunningDays[level - 1] ?? 14), collectionFee };
 }
