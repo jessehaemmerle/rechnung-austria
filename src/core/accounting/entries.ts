@@ -20,7 +20,7 @@ export interface EntryAmounts {
  *   und gleichzeitig als Vorsteuer abgezogen (bei voller Abzugsberechtigung neutral).
  * - Kleinunternehmer haben keinen Vorsteuerabzug; Ausgaben zählen brutto.
  */
-export function entryAmounts(e: Entry, settings: Pick<CompanySettings, 'isSmallBusiness'>): EntryAmounts {
+export function entryAmounts(e: Entry, settings: Pick<CompanySettings, 'isSmallBusiness'>, businessShare = 1): EntryAmounts {
   const share = categoryById(e.category).deductibleShare;
   if (e.kind === 'income') {
     const vat = e.taxCase === 'domestic' && !settings.isSmallBusiness ? roundCents((e.gross * e.vatRate) / (100 + e.vatRate)) : 0;
@@ -39,10 +39,17 @@ export function entryAmounts(e: Entry, settings: Pick<CompanySettings, 'isSmallB
     vat = 0;
   }
   const deductible = !settings.isSmallBusiness && e.inputTaxDeductible;
-  const inputTax = deductible ? vat : 0;
+  // Bei teilweise privat genutzten Anlagen nur der betriebliche Anteil (§ 12 Abs 2 UStG)
+  const inputTax = deductible ? roundCents(vat * businessShare) : 0;
   // Ohne Vorsteuerabzug gehört die (im Inland bezahlte) USt zu den Kosten.
   const cost = deductible ? net : e.taxCase === 'domestic' ? e.gross : net + (e.taxCase === 'none' ? 0 : vat);
   return { net, vat, inputTax, incomeTaxAmount: roundCents(cost * share) };
+}
+
+/** Betrieblicher Nutzungsanteil (0–1) einer Buchung, die ein Anlagegut erzeugt hat */
+export function businessShareOf(db: Pick<Database, 'assets'>, e: Entry): number {
+  const a = e.assetId ? db.assets.find((x) => x.id === e.assetId) : undefined;
+  return a ? Math.min(Math.max(a.businessUsePercent, 0), 100) / 100 : 1;
 }
 
 /** Netto-/Steueranteil eines Zahlungseingangs auf eine Ausgangsrechnung, aufgeteilt nach Steuersätzen. */

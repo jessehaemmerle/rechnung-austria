@@ -31,14 +31,15 @@ export function saveEntry(db: Database, input: Entry): { db: Database; entry: En
     bankTransactionId: existing?.bankTransactionId,
     assetId: existing?.assetId,
   };
+  // Bei Verknüpfung mit einer Bankbewegung bestimmt die Bank das Zahlungsdatum (Kassabewegungen folgen der Buchung)
   if (entry.bankTransactionId) {
     const tx = db.bankTransactions.find((t) => t.id === entry.bankTransactionId);
-    if (tx) entry = { ...entry, paidDate: tx.date, paidVia: 'bank' };
+    if (tx && tx.accountId !== cashAccount(db)?.id) entry = { ...entry, paidDate: tx.date, paidVia: 'bank' };
   }
   let next: Database = { ...db, entries: upsert(db.entries, entry) };
 
   // Anlagenverzeichnis
-  if (entry.kind === 'expense' && entry.category === 'asset') {
+  if (entry.kind === 'expense' && isAssetCategory(entry.category)) {
     const a = entryAmounts(entry, db.settings);
     const cost = a.inputTax ? a.net : entry.gross;
     const prev = next.assets.find((x) => x.id === entry.assetId);
@@ -48,10 +49,11 @@ export function saveEntry(db: Database, input: Entry): { db: Database; entry: En
       acquisitionDate: entry.date,
       inServiceDate: prev?.inServiceDate || entry.date,
       cost,
-      usefulLifeYears: prev?.usefulLifeYears ?? 3,
+      usefulLifeYears: prev?.usefulLifeYears ?? (entry.category === 'car_asset' ? 8 : 3),
       lowValue: prev ? prev.lowValue && cost <= LOW_VALUE_LIMIT : cost <= LOW_VALUE_LIMIT,
       disposalDate: prev?.disposalDate ?? '',
       disposalProceeds: prev?.disposalProceeds ?? 0,
+      disposalVatRate: prev?.disposalVatRate ?? (db.settings.isSmallBusiness ? 0 : 20),
       businessUsePercent: prev?.businessUsePercent ?? 100,
       entryId: entry.id,
       notes: prev?.notes ?? '',
@@ -151,6 +153,10 @@ export function importTransactions(db: Database, accountId: string, txs: Importe
   return { db: { ...db, bankTransactions: [...db.bankTransactions, ...added] }, added: added.length, duplicates };
 }
 
+export function isAssetCategory(category: string): boolean {
+  return category === 'asset' || category === 'car_asset';
+}
+
 function getTx(db: Database, id: string): BankTransaction {
   const tx = db.bankTransactions.find((t) => t.id === id);
   if (!tx) throw new Error('Bankbewegung nicht gefunden.');
@@ -192,6 +198,12 @@ export function linkToEntry(db: Database, txId: string, entryId: string): Databa
 export function entryFromTransaction(db: Database, txId: string, template: Entry): { db: Database; entry: Entry } {
   const tx = getTx(db, txId);
   if (tx.link) throw new Error('Bewegung ist bereits zugeordnet.');
+  // Zahlungen auf eigene Rechnungen dürfen nicht zusätzlich als Einnahme zählen
+  if (tx.amount > 0) {
+    const text = `${tx.purpose} ${tx.reference}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const inv = db.documents.find((d) => d.kind === 'invoice' && d.status !== 'draft' && d.number && text.includes(d.number.toLowerCase().replace(/[^a-z0-9]/g, '')));
+    if (inv) throw new Error(`Diese Zahlung betrifft Rechnung ${inv.number} – bitte der Rechnung zuordnen statt als Einnahme zu buchen.`);
+  }
   const res = saveEntry(db, {
     ...template,
     id: '',

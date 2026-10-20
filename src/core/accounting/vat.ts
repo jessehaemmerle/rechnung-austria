@@ -1,7 +1,7 @@
 import { roundCents } from '../money';
-import { computeTotals, paidAmount } from '../tax';
+import { computeTotals } from '../tax';
 import type { BusinessDocument, Cents, CompanySettings, Database } from '../types';
-import { entryAmounts } from './entries';
+import { businessShareOf, entryAmounts } from './entries';
 
 export interface VatPeriod {
   year: number;
@@ -97,20 +97,23 @@ function salesEvents(db: Database) {
     } else if (d.kind === 'invoice') {
       for (const p of d.payments) push(p.date, totals.gross ? p.amount / totals.gross : 0);
     } else {
-      // Ist-Besteuerung: Storno mindert die Steuer nur im Umfang bereits bezahlter Beträge.
-      const src = db.documents.find((x) => x.id === d.sourceDocumentId);
-      if (src) {
-        const srcGross = computeTotals(src, settingsOf(db, src)).gross;
-        const paidShare = srcGross ? Math.min(1, paidAmount(src) / srcGross) : 0;
-        if (paidShare > 0) push(d.issueDate, paidShare);
-      }
+      // Ist-Besteuerung: Storno mindert die Steuer erst mit der Rückzahlung (Gutschrift hat negative Summen).
+      for (const p of d.payments) push(p.date, totals.gross ? p.amount / -totals.gross : 0);
     }
   }
   for (const e of db.entries) {
     if (e.kind !== 'income') continue;
+    if (e.taxCase === 'none') continue; // z. B. Förderungen, Zinsen – nicht steuerbar
     const date = ist ? e.paidDate : e.date;
     const a = entryAmounts(e, db.settings);
-    out.push({ date, rate: db.settings.isSmallBusiness ? 0 : e.vatRate, net: a.net, vat: a.vat, exemption: db.settings.isSmallBusiness ? 'small_business' : null });
+    const exemption = e.taxCase === 'reverse_charge' ? 'reverse_charge' : e.taxCase === 'ig_acquisition' ? 'ig_delivery' : db.settings.isSmallBusiness ? 'small_business' : null;
+    out.push({ date, rate: exemption ? 0 : e.vatRate, net: a.net, vat: a.vat, exemption });
+  }
+  // Verkauf von Anlagegütern ist ein steuerpflichtiger Umsatz
+  for (const a of db.assets) {
+    if (!a.disposalDate || !a.disposalProceeds) continue;
+    const rate = db.settings.isSmallBusiness ? 0 : a.disposalVatRate ?? 20;
+    out.push({ date: a.disposalDate, rate, net: a.disposalProceeds, vat: roundCents((a.disposalProceeds * rate) / 100), exemption: db.settings.isSmallBusiness ? 'small_business' : null });
   }
   return out;
 }
@@ -137,7 +140,7 @@ export function computeUva(db: Database, period: VatPeriod): UvaResult {
   const ist = db.settings.taxationBasis === 'ist';
   for (const e of db.entries) {
     if (e.kind !== 'expense') continue;
-    const a = entryAmounts(e, db.settings);
+    const a = entryAmounts(e, db.settings, businessShareOf(db, e));
     if (e.taxCase === 'reverse_charge' || e.taxCase === 'ig_acquisition') {
       // Steuerschuld und Vorsteuer entstehen mit Rechnungsdatum, unabhängig von der Zahlung.
       if (!inPeriod(e.date, period)) continue;

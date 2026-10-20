@@ -230,7 +230,10 @@ export interface Asset {
   /** Geringwertiges Wirtschaftsgut – Sofortabschreibung */
   lowValue: boolean;
   disposalDate: string;
+  /** Verkaufserlös netto */
   disposalProceeds: Cents;
+  /** USt-Satz des Verkaufs (Anlagenverkauf ist steuerpflichtig) */
+  disposalVatRate?: VatRate;
   /** Anteil der betrieblichen Nutzung in Prozent */
   businessUsePercent: number;
   entryId?: string;

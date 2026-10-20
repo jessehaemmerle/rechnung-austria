@@ -36,8 +36,12 @@ export function afaSchedule(asset: Asset): AfaYear[] {
   let book = base;
   for (let year = startYear; book > 0 && year <= disposalYear; year++) {
     let afa = annual;
-    if (year === startYear && halfStart) afa = roundCents(annual / 2);
-    if (year === disposalYear && halfEnd && year !== startYear) afa = roundCents(annual / 2);
+    if (year === startYear && year === disposalYear) {
+      // Nutzung im selben Jahr begonnen und beendet: halbe AfA bei höchstens sechs Monaten
+      const months = Number(asset.disposalDate.slice(5, 7)) - Number((asset.inServiceDate || asset.acquisitionDate).slice(5, 7)) + 1;
+      if (months <= 6) afa = roundCents(annual / 2);
+    } else if (year === startYear && halfStart) afa = roundCents(annual / 2);
+    else if (year === disposalYear && halfEnd) afa = roundCents(annual / 2);
     afa = Math.min(afa, book);
     book -= afa;
     let disposalLoss = 0;

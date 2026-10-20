@@ -200,15 +200,26 @@ export function settingsFor(db: Database, doc: BusinessDocument): CompanySetting
 
 export function addPayment(db: Database, docId: string, payment: Omit<Payment, 'id'>): Database {
   const doc = getDoc(db, docId);
-  if (doc.status !== 'final' || doc.kind !== 'invoice') throw new Error('Zahlungen können nur zu finalisierten Rechnungen erfasst werden.');
+  const refund = doc.kind === 'credit_note' && doc.status === 'final';
+  if (!refund && (doc.status !== 'final' || doc.kind !== 'invoice')) throw new Error('Zahlungen können nur zu finalisierten Rechnungen erfasst werden.');
   if (!(payment.amount > 0)) throw new Error('Betrag muss größer als 0 sein.');
   return replaceDoc(db, { ...doc, payments: [...doc.payments, { ...payment, id: newId() }] });
 }
 
+/**
+ * Entfernt eine Zahlung (auch bei stornierten Rechnungen, damit Fehlzuordnungen
+ * korrigierbar bleiben) und hebt eine zugehörige Bankzuordnung auf.
+ */
 export function removePayment(db: Database, docId: string, paymentId: string): Database {
   const doc = getDoc(db, docId);
-  if (doc.status !== 'final' || doc.kind !== 'invoice') throw new Error('Zahlungen können nur bei offenen Rechnungen geändert werden.');
-  return replaceDoc(db, { ...doc, payments: doc.payments.filter((p) => p.id !== paymentId) });
+  if (doc.kind === 'offer' || doc.status === 'draft') throw new Error('Keine Zahlung zu diesem Dokument.');
+  const next = replaceDoc(db, { ...doc, payments: doc.payments.filter((p) => p.id !== paymentId) });
+  return {
+    ...next,
+    bankTransactions: (next.bankTransactions ?? []).map((t) =>
+      t.link?.type === 'invoice' && t.link.paymentId === paymentId ? { ...t, link: undefined } : t,
+    ),
+  };
 }
 
 export function addDunning(

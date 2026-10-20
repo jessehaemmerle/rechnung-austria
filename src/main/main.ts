@@ -193,11 +193,7 @@ function registerIpc() {
   );
   handle('payment:remove', (id: string, paymentId: string) =>
     mutate((db) => {
-      const next = removePayment(db, id, paymentId);
-      const bankTransactions = next.bankTransactions.map((t) =>
-        t.link?.type === 'invoice' && t.link.paymentId === paymentId ? { ...t, link: undefined } : t,
-      );
-      return { db: { ...next, bankTransactions }, result: true };
+      return { db: removePayment(db, id, paymentId), result: true };
     }),
   );
   handle('dunning:add', (id: string, opts: { chargeInterest: boolean; applyCollectionFee: boolean }) =>

@@ -65,7 +65,7 @@ export function renderUvaHtml(db: Database, period: VatPeriod): string {
 
 export function renderEarHtml(db: Database, year: number): string {
   const r = earReport(db, year);
-  const est = estimateTaxes(r.taxableProfit, r.svsPaid, year, db.settings.svsInsured);
+  const est = estimateTaxes(r.profit, r.svsPaid, year, db.settings.svsInsured);
   const lines = (l: typeof r.income) => l.map((x) => row(x.e1a, x.label, x.amount)).join('');
   const body = `
   <h2>Betriebseinnahmen</h2><table>${lines(r.income)}<tr class="sum"><td></td><td>Summe Betriebseinnahmen</td><td class="num">${eur(r.totalIncome)}</td></tr></table>

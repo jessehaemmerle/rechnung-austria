@@ -14,7 +14,7 @@ export function Taxes({ db, notify }: PageProps) {
   const [datev, setDatev] = useState({ consultant: '', client: '' });
   const years = [...new Set([current, current - 1, ...db.documents.map((d) => Number(d.issueDate.slice(0, 4))), ...db.entries.map((e) => Number(e.date.slice(0, 4)))])].sort((a, b) => b - a);
   const ear = earReport(db, year);
-  const est = estimateTaxes(ear.taxableProfit, ear.svsPaid, year, db.settings.svsInsured);
+  const est = estimateTaxes(ear.profit, ear.svsPaid, year, db.settings.svsInsured);
   const periods = periodsOfYear(year, db.settings.vatPeriod);
   const today = todayIso();
   const save = (p: Promise<string | null>, ok: string) => p.then((r) => r && notify(ok)).catch((e) => notify(e.message, 'error'));

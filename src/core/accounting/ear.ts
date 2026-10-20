@@ -6,6 +6,7 @@ import { afaForYear } from './assets';
 import { CATEGORIES, categoryById, KM_ALLOWANCE } from './categories';
 import { entryAmounts } from './entries';
 import { kmAllowanceForYear } from './trips';
+import { isAssetCategory } from './ledger';
 
 export interface EarLine {
   e1a: string;
@@ -51,12 +52,14 @@ export function earReport(db: Database, year: number): EarReport {
   };
 
   // Zahlungseingänge auf Ausgangsrechnungen (netto bzw. brutto bei Kleinunternehmern)
+  // Rückzahlungen auf Stornorechnungen mindern die Erlöse (Gutschrift: negative Summen)
   for (const d of db.documents) {
-    if (d.kind !== 'invoice' || d.status === 'draft') continue;
+    if (d.kind === 'offer' || d.status === 'draft') continue;
     const t = computeTotals(d, settingsOf(db, d));
     for (const p of d.payments) {
       if (yearOf(p.date) !== year || !t.gross) continue;
-      add(income, '9040', 'Erlöse aus Lieferungen und Leistungen', roundCents((t.net * p.amount) / t.gross));
+      const net = roundCents((t.net * p.amount) / Math.abs(t.gross));
+      add(income, '9040', 'Erlöse aus Lieferungen und Leistungen', net);
     }
   }
 
@@ -69,20 +72,24 @@ export function earReport(db: Database, year: number): EarReport {
       add(income, cat.e1a, cat.e1aLabel, a.incomeTaxAmount);
       continue;
     }
-    if (e.category === 'asset') continue; // wirkt über das Anlagenverzeichnis
+    if (isAssetCategory(e.category)) continue; // wirkt über das Anlagenverzeichnis
     if (e.category === 'svs') svsPaid += a.incomeTaxAmount;
     add(expenses, cat.e1a, cat.e1aLabel, a.incomeTaxAmount);
   }
   for (const e of db.entries) {
-    if (e.kind === 'expense' && e.category === 'asset' && !e.assetId)
+    if (e.kind === 'expense' && isAssetCategory(e.category) && !e.assetId)
       warnings.push(`Anlagegut „${e.description || e.counterparty}“ ist noch nicht im Anlagenverzeichnis.`);
   }
 
   for (const { asset, row } of afaForYear(db.assets, year)) {
     if (row.afa) add(expenses, '9130', asset.lowValue ? 'Geringwertige Wirtschaftsgüter' : 'Abschreibungen auf das Anlagevermögen', row.afa);
     if (row.disposalLoss) add(expenses, '9130', 'Restbuchwert ausgeschiedener Anlagen', row.disposalLoss);
-    if (asset.disposalDate && yearOf(asset.disposalDate) === year && asset.disposalProceeds)
+    if (asset.disposalDate && yearOf(asset.disposalDate) === year && asset.disposalProceeds) {
+      // Kleinunternehmer erfassen brutto = netto (keine USt)
       add(income, '9090', 'Erlöse aus dem Verkauf von Anlagen', asset.disposalProceeds);
+      if (db.entries.some((e) => e.kind === 'income' && e.paidDate && yearOf(e.paidDate) === year && e.gross >= asset.disposalProceeds && e.description.toLowerCase().includes(asset.name.toLowerCase().slice(0, 10))))
+        warnings.push(`Verkauf von „${asset.name}“ ist im Anlagenverzeichnis erfasst – eine zusätzliche Einnahmenbuchung würde doppelt zählen.`);
+    }
   }
 
   const km = kmAllowanceForYear(db.trips, year);

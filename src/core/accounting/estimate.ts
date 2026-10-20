@@ -75,11 +75,19 @@ export interface TaxEstimate {
   reserve: Cents;
 }
 
-export function estimateTaxes(taxableProfit: Cents, svsPaid: Cents, year: number, svsInsured = true): TaxEstimate {
-  const svs = svsInsured ? svsEstimate(taxableProfit, svsPaid) : { base: 0, health: 0, pension: 0, provision: 0, accident: 0, total: 0 };
+/** Grundfreibetrag (§ 10 EStG): 15 % von bis zu 33.000 € Gewinn */
+function basicAllowance(profit: Cents): Cents {
+  return profit > 0 ? roundCents(Math.min(profit, 3_300_000) * 0.15) : 0;
+}
+
+/** @param profit Gewinn vor Grundfreibetrag */
+export function estimateTaxes(profit: Cents, svsPaid: Cents, year: number, svsInsured = true): TaxEstimate {
+  const svs = svsInsured ? svsEstimate(profit - basicAllowance(profit), svsPaid) : { base: 0, health: 0, pension: 0, provision: 0, accident: 0, total: 0 };
   const svsDifference = svsInsured ? svs.total - svsPaid : 0;
-  // Die SVS-Nachzahlung ist im Jahr der Zahlung absetzbar; für die Schätzung wird sie bereits abgezogen.
-  const taxableIncome = Math.max(0, taxableProfit - Math.max(0, svsDifference));
+  // Die SVS-Nachzahlung ist im Jahr der Zahlung absetzbar; für die Schätzung wird sie vorab abgezogen,
+  // danach der Grundfreibetrag auf den verbleibenden Gewinn.
+  const adjusted = profit - Math.max(0, svsDifference);
+  const taxableIncome = Math.max(0, adjusted - basicAllowance(adjusted));
   const tax = incomeTax(taxableIncome, year);
   return { svs, svsDifference, taxableIncome, incomeTax: tax, tariffYear: tariffYear(year), reserve: tax + Math.max(0, svsDifference) };
 }

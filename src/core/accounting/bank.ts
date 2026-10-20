@@ -37,6 +37,8 @@ export function parseCsv(text: string): string[][] {
 /** "+1.234,56", "-12,00", "1234.56", "1,234.56" → Cent */
 export function parseAmount(s: string): Cents {
   let v = s.replace(/[€\sA-Za-z]/g, '');
+  // "1.234" oder "-2.500" ohne Komma: Punkte sind Tausendertrennzeichen
+  if (/^[+-]?\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, '');
   const lastComma = v.lastIndexOf(',');
   const lastDot = v.lastIndexOf('.');
   if (lastComma > lastDot) v = v.replace(/\./g, '').replace(',', '.');

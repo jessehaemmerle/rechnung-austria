@@ -11,7 +11,7 @@ import {
 import { kmAllowanceForYear } from '../src/core/accounting/trips';
 import { accrualDate, computeUva, periodsOfYear, vatDueDate } from '../src/core/accounting/vat';
 import { validateDatabase } from '../src/core/defaults';
-import { finalizeDocument, saveDraft } from '../src/core/documents';
+import { addPayment, cancelInvoice, finalizeDocument, saveDraft } from '../src/core/documents';
 import type { Asset, Database, Entry } from '../src/core/types';
 import { invoice, item, setup } from './fixtures';
 
@@ -227,6 +227,67 @@ describe('Bankimport', () => {
     expect(db.bankTransactions.filter((t) => t.accountId === 'cash')).toHaveLength(0);
     db = addCashMovement(db, { date: '2026-03-01', amount: 20000, purpose: 'Bareinlage', type: 'private' });
     expect(db.bankTransactions.filter((t) => t.accountId === 'cash')).toHaveLength(1);
+  });
+});
+
+describe('Review-Regressionen Buchhaltung', () => {
+  it('Barbuchung bleibt nach erneutem Speichern im Kassabuch', () => {
+    let db = withBank(setup());
+    db = saveEntry(db, expense(db, { gross: 1500, paidVia: 'cash', paidDate: '2026-03-05' })).db;
+    db = saveEntry(db, { ...db.entries[0], description: 'Tippfehler korrigiert', paidDate: '2026-03-06' }).db;
+    const cash = db.bankTransactions.filter((t) => t.accountId === 'cash');
+    expect(cash).toHaveLength(1);
+    expect(cash[0].date).toBe('2026-03-06');
+    expect(db.entries[0].paidVia).toBe('cash');
+  });
+  it('Rückzahlung eines Stornos mindert Erlöse und Ist-USt', () => {
+    let db = setup();
+    db = { ...db, settings: { ...db.settings, taxationBasis: 'ist' } };
+    const inv = invoice(db, [item()]);
+    db = finalizeDocument(saveDraft(db, inv), inv.id).db;
+    db = addPayment(db, inv.id, { date: '2026-03-20', amount: 12000, note: '' });
+    const storno = cancelInvoice(db, inv.id, '2026-04-02');
+    db = storno.db;
+    const [, q2] = periodsOfYear(2026, 'quarterly');
+    expect(computeUva(db, q2).vat20).toBe(0); // ohne Rückzahlung keine Korrektur
+    db = addPayment(db, storno.doc.id, { date: '2026-04-10', amount: 12000, note: '' });
+    expect(computeUva(db, q2)).toMatchObject({ kz022: -10000, vat20: -2000 });
+    expect(earReport(db, 2026).totalIncome).toBe(0);
+  });
+  it('bucht Rechnungszahlungen nicht zusätzlich als Einnahme', () => {
+    let db = withBank(setup());
+    const inv = invoice(db, [item()]);
+    db = finalizeDocument(saveDraft(db, inv), inv.id).db;
+    db = importTransactions(db, 'bank', [{ date: '2026-03-20', amount: 12000, counterparty: 'Kunde', counterpartyIban: '', purpose: 'RE-2026-0001', reference: '' }]).db;
+    expect(() => entryFromTransaction(db, db.bankTransactions[0].id, emptyEntry('income', '', db.settings))).toThrow(/Rechnung RE-2026-0001/);
+  });
+  it('Anlagenverkauf ist umsatzsteuerpflichtig', () => {
+    let db = setup();
+    db = { ...db, assets: [{ id: 'a', name: 'PC', acquisitionDate: '2024-01-10', inServiceDate: '2024-01-10', cost: 300000, usefulLifeYears: 3, lowValue: false, disposalDate: '2026-02-01', disposalProceeds: 50000, disposalVatRate: 20, businessUsePercent: 100, notes: '' }] };
+    expect(computeUva(db, periodsOfYear(2026, 'monthly')[1])).toMatchObject({ kz022: 50000, vat20: 10000 });
+  });
+  it('Vorsteuer bei Privatanteil nur anteilig, Einnahmen mit Reverse Charge nicht in KZ 022', () => {
+    let db = setup();
+    db = saveEntry(db, expense(db, { category: 'asset', gross: 240000, inputTaxDeductible: true, date: '2026-03-01', paidDate: '2026-03-01' })).db;
+    db = { ...db, assets: db.assets.map((a) => ({ ...a, businessUsePercent: 60 })) };
+    const q1 = periodsOfYear(2026, 'quarterly')[0];
+    expect(computeUva(db, q1).kz060).toBe(24000);
+    db = saveEntry(db, { ...emptyEntry('income', '2026-03-02', db.settings), gross: 5000, taxCase: 'reverse_charge' }).db;
+    expect(computeUva(db, q1)).toMatchObject({ kz022: 0, zmServices: 5000 });
+  });
+  it('Halbjahresregel bei An- und Verkauf im selben Jahr', () => {
+    const rows = afaSchedule({ id: 'a', name: 'x', acquisitionDate: '2026-02-01', inServiceDate: '2026-02-01', cost: 300000, usefulLifeYears: 3, lowValue: false, disposalDate: '2026-05-31', disposalProceeds: 0, businessUsePercent: 100, notes: '' });
+    expect(rows).toEqual([{ year: 2026, afa: 50000, bookValue: 0, disposalLoss: 250000 }]);
+  });
+  it('liest Beträge mit Tausenderpunkt ohne Komma', () => {
+    expect(parseAmount('1.234')).toBe(123400);
+    expect(parseAmount('-2.500')).toBe(-250000);
+    expect(parseAmount('12.5')).toBe(1250);
+  });
+  it('Schätzung zieht SVS vor dem Grundfreibetrag ab', () => {
+    const e = estimateTaxes(4_000_000, 0, 2026);
+    const adjusted = 4_000_000 - e.svsDifference;
+    expect(e.taxableIncome).toBe(adjusted - Math.round(Math.min(adjusted, 3_300_000) * 0.15));
   });
 });
 

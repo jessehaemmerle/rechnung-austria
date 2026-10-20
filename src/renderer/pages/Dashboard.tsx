@@ -26,7 +26,7 @@ export function Dashboard({ db, go }: PageProps) {
   const unlinked = db.bankTransactions.filter((t) => !t.link).length;
   const unpaidExpenses = db.entries.filter((e) => e.kind === 'expense' && !e.paidDate).length;
   const ear = earReport(db, year);
-  const reserve = estimateTaxes(ear.taxableProfit, ear.svsPaid, year, db.settings.svsInsured).reserve;
+  const reserve = estimateTaxes(ear.profit, ear.svsPaid, year, db.settings.svsInsured).reserve;
   // Nächste fällige UVA (aktuelles und Vorjahr, damit die Jänner/Februar-Termine sichtbar sind)
   const nextUva = db.settings.isSmallBusiness
     ? undefined

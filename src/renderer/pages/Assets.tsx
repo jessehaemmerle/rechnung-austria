@@ -21,7 +21,7 @@ export function Assets({ db, reload, notify }: PageProps) {
         <h1>Anlagenverzeichnis</h1>
         <div className="actions">
           <button onClick={() => run(() => api.exportAccountingPdf('assets', year), 'Anlagenverzeichnis gespeichert.')}>Als PDF ({year})</button>
-          <button className="primary" onClick={() => setEdit({ id: '', name: '', acquisitionDate: todayIso(), inServiceDate: todayIso(), cost: 0, usefulLifeYears: 3, lowValue: false, disposalDate: '', disposalProceeds: 0, businessUsePercent: 100, notes: '' })}>
+          <button className="primary" onClick={() => setEdit({ id: '', name: '', acquisitionDate: todayIso(), inServiceDate: todayIso(), cost: 0, usefulLifeYears: 3, lowValue: false, disposalDate: '', disposalProceeds: 0, disposalVatRate: db.settings.isSmallBusiness ? 0 : 20, businessUsePercent: 100, notes: '' })}>
             Wirtschaftsgut anlegen
           </button>
         </div>
@@ -43,7 +43,14 @@ export function Assets({ db, reload, notify }: PageProps) {
             <Field label="Betriebliche Nutzung (%)"><input type="number" min={0} max={100} value={edit.businessUsePercent} onChange={(e) => set({ businessUsePercent: Number(e.target.value) })} /></Field>
             <label className="check field"><input type="checkbox" checked={edit.lowValue} disabled={edit.cost > LOW_VALUE_LIMIT} onChange={(e) => set({ lowValue: e.target.checked })} /> Geringwertiges Wirtschaftsgut – sofort abschreiben</label>
             <Field label="Ausgeschieden am" hint="Verkauf, Entnahme oder Verschrottung"><input type="date" value={edit.disposalDate} onChange={(e) => set({ disposalDate: e.target.value })} /></Field>
-            <Field label="Verkaufserlös netto (€)"><MoneyInput value={edit.disposalProceeds} onChange={(c) => set({ disposalProceeds: c })} /></Field>
+            <Field label="Verkaufserlös netto (€)" hint="Nicht zusätzlich als Einnahme buchen"><MoneyInput value={edit.disposalProceeds} onChange={(c) => set({ disposalProceeds: c })} /></Field>
+            {!db.settings.isSmallBusiness && (
+              <Field label="USt auf den Verkauf">
+                <select value={edit.disposalVatRate ?? 20} onChange={(e) => set({ disposalVatRate: Number(e.target.value) as 20 | 13 | 10 | 0 })}>
+                  {[20, 13, 10, 0].map((r) => <option key={r} value={r}>{r} %</option>)}
+                </select>
+              </Field>
+            )}
             <Field label="Notiz" wide><input value={edit.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
           </div>
           {edit.cost > 0 && (

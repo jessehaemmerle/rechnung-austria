@@ -326,6 +326,40 @@ export function DocumentEditor({ db, reload, go, notify, id }: PageProps & { id:
           </section>
         )}
 
+        {doc.kind === 'credit_note' && !isDraft && (
+          <section className="panel">
+            <h2>Rückzahlung an den Kunden</h2>
+            <p className="muted">
+              Wurde die stornierte Rechnung bereits bezahlt, erfassen Sie hier die Rückzahlung. Sie mindert Erlöse und – bei Ist-Besteuerung – die Umsatzsteuer im Monat der Zahlung.
+            </p>
+            {doc.payments.length > 0 && (
+              <ul className="plain">
+                {doc.payments.map((p) => (
+                  <li key={p.id}>
+                    {formatDate(p.date)} – {formatEuro(p.amount)} {p.note && `(${p.note})`}{' '}
+                    <button className="link" onClick={() => window.confirm('Rückzahlung entfernen?') && run(() => api.removePayment(doc.id, p.id))}>entfernen</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {paidAmount(doc) < -totals.gross && (
+              <div className="inline-form">
+                <input type="date" aria-label="Datum der Rückzahlung" value={payment.date} onChange={(e) => setPayment({ ...payment, date: e.target.value })} />
+                <MoneyInput ariaLabel="Betrag" value={payment.amount || -totals.gross - paidAmount(doc)} onChange={(c) => setPayment({ ...payment, amount: c })} />
+                <button
+                  onClick={async () => {
+                    const amount = payment.amount || -totals.gross - paidAmount(doc);
+                    await run(() => api.addPayment(doc.id, { ...payment, amount }), 'Rückzahlung erfasst.');
+                    setPayment({ date: todayIso(), amount: 0, note: '' });
+                  }}
+                >
+                  Rückzahlung erfassen
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
         {doc.kind === 'invoice' && !isDraft && (
           <>
             <section className="panel">

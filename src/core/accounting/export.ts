@@ -4,7 +4,7 @@ import { computeTotals } from '../tax';
 import type { AccountMapping, Cents, CompanySettings, Database, VatRate } from '../types';
 import { afaForYear } from './assets';
 import { categoryById, KM_ALLOWANCE } from './categories';
-import { entryAmounts } from './entries';
+import { businessShareOf, entryAmounts } from './entries';
 import { kmAllowanceForYear } from './trips';
 
 /** Steuerart einer Buchungszeile */
@@ -58,13 +58,14 @@ export function buildJournal(db: Database, year: number): JournalLine[] {
   const lines: JournalLine[] = [];
 
   for (const d of db.documents) {
-    if (d.kind !== 'invoice' || d.status === 'draft') continue;
+    if (d.kind === 'offer' || d.status === 'draft') continue;
     const s: CompanySettings = d.companySnapshot ?? db.settings;
     const t = computeTotals(d, s);
     if (!t.gross) continue;
     for (const p of d.payments) {
       if (yearOf(p.date) !== year) continue;
-      const factor = p.amount / t.gross;
+      // Rückzahlung einer Stornorechnung: Faktor negativ, da die Gutschrift negative Summen hat
+      const factor = p.amount / Math.abs(t.gross);
       for (const g of t.groups) {
         const net = roundCents(g.net * factor);
         const vat = roundCents(g.vat * factor);
@@ -79,7 +80,7 @@ export function buildJournal(db: Database, year: number): JournalLine[] {
 
   for (const e of db.entries) {
     if (!e.paidDate || yearOf(e.paidDate) !== year) continue;
-    const a = entryAmounts(e, db.settings);
+    const a = entryAmounts(e, db.settings, businessShareOf(db, e));
     const money = e.paidVia === 'cash' ? acc.cash : acc.bank;
     const symbol = e.paidVia === 'cash' ? 'KA' : 'BK';
     if (e.kind === 'income') {
