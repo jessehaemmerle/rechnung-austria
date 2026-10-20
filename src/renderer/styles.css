@@ -182,3 +182,40 @@ ul.plain li { padding: 0.25rem 0; }
   .page { padding: 1rem; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Buchhaltung */
+.nav-group { font-size: 0.75rem; color: #8fa09e; padding: 1rem 0.75rem 0.3rem; }
+.nav-gap { height: 0.9rem; }
+.nav-item { display: contents; }
+.wide-page { max-width: 1300px; }
+.small { font-size: 0.82rem; }
+.pos { color: var(--paid); }
+.calc { color: var(--ink-soft); padding: 0.4rem 0; }
+.figures.three { grid-template-columns: repeat(3, 1fr); }
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--line); margin-bottom: 0.9rem; flex-wrap: wrap; }
+.tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 0.55rem 0.9rem; }
+.tab.active { border-bottom-color: var(--petrol); font-weight: 600; }
+.toolbar { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.9rem; flex-wrap: wrap; }
+.toolbar select { width: auto; }
+.file-btn { position: relative; display: inline-block; background: var(--petrol); color: #fff; padding: 0.45rem 0.85rem; border-radius: var(--radius-s); cursor: pointer; }
+.file-btn:focus-within { outline: 2px solid var(--petrol); outline-offset: 2px; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+@media (prefers-color-scheme: dark) { .file-btn { color: #0f1415; } }
+table.list.bank td { vertical-align: top; }
+.ellipsis { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assign { min-width: 340px; }
+.chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.chip { padding: 0.15rem 0.55rem; font-size: 0.82rem; border-radius: 999px; }
+.chip.suggest { border-color: var(--petrol); color: var(--petrol); font-weight: 600; }
+table.compact td, table.compact th { padding: 0.3rem 0.5rem; }
+table.afa { max-width: 420px; margin-bottom: 1rem; }
+tr.future td { color: var(--ink-soft); }
+tr.total-row td { font-weight: 600; border-top: 1px solid var(--ink-soft); }
+.page-head > select, .actions select { width: auto; }
+td.strong { font-weight: 600; }
+tfoot td { padding: 0.55rem 0.75rem; font-weight: 600; border-top: 1px solid var(--line); }
+.receipts { border-top: 1px solid var(--line); padding-top: 0.75rem; margin-bottom: 1rem; }
+.receipts h3 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+.errors { color: var(--due); }
+.bar.center { justify-content: center; margin-top: 1rem; }
+details summary { cursor: pointer; color: var(--petrol); margin: 0.5rem 0 0.75rem; }

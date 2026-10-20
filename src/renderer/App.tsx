@@ -9,6 +9,11 @@ import { DocumentEditor } from './pages/DocumentEditor';
 import { DocumentList } from './pages/DocumentList';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { Assets } from './pages/Assets';
+import { Bank } from './pages/Bank';
+import { Entries } from './pages/Entries';
+import { Taxes } from './pages/Taxes';
+import { Trips } from './pages/Trips';
 
 export type Route =
   | { page: 'dashboard' }
@@ -18,6 +23,11 @@ export type Route =
   | { page: 'articles' }
   | { page: 'reports' }
   | { page: 'settings' }
+  | { page: 'entries' }
+  | { page: 'bank' }
+  | { page: 'assets' }
+  | { page: 'trips' }
+  | { page: 'taxes' }
   | { page: 'doc'; id: string };
 
 export interface PageProps {
@@ -27,13 +37,18 @@ export interface PageProps {
   notify: (msg: string, kind?: 'ok' | 'error') => void;
 }
 
-const NAV: { page: Route['page']; label: string }[] = [
+const NAV: { group?: string; page: Route['page']; label: string }[] = [
   { page: 'dashboard', label: 'Übersicht' },
-  { page: 'invoices', label: 'Rechnungen' },
+  { group: 'Verkauf', page: 'invoices', label: 'Rechnungen' },
   { page: 'offers', label: 'Angebote' },
   { page: 'customers', label: 'Kunden' },
   { page: 'articles', label: 'Leistungen' },
-  { page: 'reports', label: 'Auswertungen' },
+  { group: 'Buchhaltung', page: 'bank', label: 'Bank & Kassa' },
+  { page: 'entries', label: 'Ausgaben & Belege' },
+  { page: 'assets', label: 'Anlagen' },
+  { page: 'trips', label: 'Fahrtenbuch' },
+  { page: 'taxes', label: 'Steuern' },
+  { group: '', page: 'reports', label: 'Auswertungen' },
   { page: 'settings', label: 'Einstellungen' },
 ];
 
@@ -65,9 +80,12 @@ export function App() {
           </span>
         </div>
         {NAV.map((n) => (
-          <button key={n.page} className={activeNav === n.page ? 'nav active' : 'nav'} onClick={() => setRoute({ page: n.page } as Route)}>
-            {n.label}
-          </button>
+          <div key={n.page} className="nav-item">
+            {n.group !== undefined && (n.group ? <div className="nav-group">{n.group}</div> : <div className="nav-gap" />)}
+            <button className={activeNav === n.page ? 'nav active' : 'nav'} onClick={() => setRoute({ page: n.page } as Route)}>
+              {n.label}
+            </button>
+          </div>
         ))}
       </nav>
       <main className="content">
@@ -84,6 +102,11 @@ export function App() {
         {route.page === 'articles' && <Articles {...props} />}
         {route.page === 'reports' && <Reports {...props} />}
         {route.page === 'settings' && <Settings {...props} />}
+        {route.page === 'entries' && <Entries {...props} />}
+        {route.page === 'bank' && <Bank {...props} />}
+        {route.page === 'assets' && <Assets {...props} />}
+        {route.page === 'trips' && <Trips {...props} />}
+        {route.page === 'taxes' && <Taxes {...props} />}
         {route.page === 'doc' && <DocumentEditor key={route.id} {...props} id={route.id} />}
       </main>
       <Toasts toasts={toasts} />

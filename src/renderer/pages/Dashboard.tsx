@@ -4,6 +4,9 @@ import { formatEuro } from '../../core/money';
 import { checkSmallBusiness, SMALL_BUSINESS_LIMIT, SMALL_BUSINESS_TOLERANCE_LIMIT } from '../../core/smallBusiness';
 import { openAmount } from '../../core/tax';
 import { yearReport } from '../../core/reports';
+import { earReport } from '../../core/accounting/ear';
+import { estimateTaxes } from '../../core/accounting/estimate';
+import { computeUva, periodsOfYear, vatDueDate } from '../../core/accounting/vat';
 import type { PageProps } from '../App';
 import { Empty, StateBadge } from '../components/fields';
 
@@ -20,6 +23,16 @@ export function Dashboard({ db, go }: PageProps) {
   const overdueSum = open.filter((x) => x.state === 'overdue').reduce((s, x) => s + x.amount, 0);
   const openOffers = db.documents.filter((d) => d.kind === 'offer' && d.status === 'final' && d.offerStatus === 'open');
   const pct = Math.min(100, (sb.revenue / SMALL_BUSINESS_TOLERANCE_LIMIT) * 100);
+  const unlinked = db.bankTransactions.filter((t) => !t.link).length;
+  const unpaidExpenses = db.entries.filter((e) => e.kind === 'expense' && !e.paidDate).length;
+  const ear = earReport(db, year);
+  const reserve = estimateTaxes(ear.taxableProfit, ear.svsPaid, year, db.settings.svsInsured).reserve;
+  // Nächste fällige UVA (aktuelles und Vorjahr, damit die Jänner/Februar-Termine sichtbar sind)
+  const nextUva = db.settings.isSmallBusiness
+    ? undefined
+    : [...periodsOfYear(year - 1, db.settings.vatPeriod), ...periodsOfYear(year, db.settings.vatPeriod)]
+        .filter((p) => p.to < today && vatDueDate(p) >= today)
+        .map((p) => ({ p, due: vatDueDate(p), payable: computeUva(db, p).payable }))[0];
 
   return (
     <div className="page">
@@ -59,6 +72,26 @@ export function Dashboard({ db, go }: PageProps) {
           <p className="muted">{sb.message}</p>
         </section>
       )}
+
+      <section className="panel todo">
+        <h2>Buchhaltung</h2>
+        <ul className="plain">
+          {nextUva && (
+            <li>
+              UVA {nextUva.p.label}: {nextUva.payable >= 0 ? `Zahllast ${formatEuro(nextUva.payable)}` : `Gutschrift ${formatEuro(-nextUva.payable)}`}, fällig am <strong>{formatDate(nextUva.due)}</strong>{' '}
+              <button className="link" onClick={() => go({ page: 'taxes' })}>Zur UVA</button>
+            </li>
+          )}
+          <li>
+            {unlinked === 0 ? 'Alle Bankbewegungen sind zugeordnet.' : `${unlinked} Bankbewegungen warten auf Zuordnung.`}{' '}
+            <button className="link" onClick={() => go({ page: 'bank' })}>{unlinked ? 'Zuordnen' : 'Kontoauszug importieren'}</button>
+          </li>
+          {unpaidExpenses > 0 && (
+            <li>{unpaidExpenses} Eingangsrechnungen sind noch unbezahlt. <button className="link" onClick={() => go({ page: 'entries' })}>Ansehen</button></li>
+          )}
+          <li>Gewinn {year} bisher {formatEuro(ear.profit)} · empfohlene Rücklage für ESt und SVS <strong>{formatEuro(reserve)}</strong></li>
+        </ul>
+      </section>
 
       <section className="panel">
         <div className="panel-head">

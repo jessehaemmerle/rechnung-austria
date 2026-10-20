@@ -27,6 +27,7 @@ import type { Article, BusinessDocument, CompanySettings, Customer, Database, Of
 import type { EInvoiceFormat } from '../preload/api';
 import { embedFacturX, htmlToPdf } from './pdf';
 import { Store } from './store';
+import { registerAccountingIpc } from './accounting';
 
 let store: Store;
 let win: BrowserWindow | null = null;
@@ -190,7 +191,15 @@ function registerIpc() {
   handle('payment:add', (id: string, p: { date: string; amount: number; note: string }) =>
     mutate((db) => ({ db: addPayment(db, id, p), result: true })),
   );
-  handle('payment:remove', (id: string, paymentId: string) => mutate((db) => ({ db: removePayment(db, id, paymentId), result: true })));
+  handle('payment:remove', (id: string, paymentId: string) =>
+    mutate((db) => {
+      const next = removePayment(db, id, paymentId);
+      const bankTransactions = next.bankTransactions.map((t) =>
+        t.link?.type === 'invoice' && t.link.paymentId === paymentId ? { ...t, link: undefined } : t,
+      );
+      return { db: { ...next, bankTransactions }, result: true };
+    }),
+  );
   handle('dunning:add', (id: string, opts: { chargeInterest: boolean; applyCollectionFee: boolean }) =>
     mutate((db) => ({ db: addDunning(db, id, opts), result: true })),
   );
@@ -248,6 +257,7 @@ function registerIpc() {
     return true;
   });
   handle('app:showDataFolder', () => shell.showItemInFolder(store.dataFile));
+  registerAccountingIpc(handle, store, () => win);
 }
 
 // Deutsche Datums- und Zahlenformate in Eingabefeldern

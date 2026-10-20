@@ -26,6 +26,10 @@ export class Store {
     return this.file;
   }
 
+  get dataDir(): string {
+    return path.dirname(this.file);
+  }
+
   private load(): Database {
     if (!fs.existsSync(this.file)) return emptyDatabase();
     const raw = fs.readFileSync(this.file, 'utf8');

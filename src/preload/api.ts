@@ -1,6 +1,8 @@
-import type { Article, BusinessDocument, CompanySettings, Customer, Database, OfferStatus } from '../core/types';
+import type { ImportedTx } from '../core/accounting/bank';
+import type { Article, Asset, BankAccount, BusinessDocument, CompanySettings, Customer, Database, Entry, OfferStatus, Trip } from '../core/types';
 
 export type EInvoiceFormat = 'ebinterface' | 'xrechnung' | 'zugferd';
+export type AccountingReport = 'uva' | 'ear' | 'assets' | 'trips' | 'cashbook';
 
 /** Schnittstelle zwischen Oberfläche und Hauptprozess (alle Aufrufe asynchron). */
 export interface Api {
@@ -29,6 +31,26 @@ export interface Api {
   exportBackup(): Promise<string | null>;
   importBackup(): Promise<boolean>;
   showDataFolder(): Promise<void>;
+  saveEntry(e: Entry): Promise<Entry>;
+  deleteEntry(id: string): Promise<boolean>;
+  attachReceipt(entryId: string): Promise<boolean>;
+  openReceipt(entryId: string, index: number): Promise<boolean>;
+  saveAsset(a: Asset): Promise<boolean>;
+  deleteAsset(id: string): Promise<boolean>;
+  saveTrip(t: Trip): Promise<boolean>;
+  deleteTrip(id: string): Promise<boolean>;
+  saveAccount(a: BankAccount): Promise<boolean>;
+  deleteAccount(id: string): Promise<boolean>;
+  importBank(accountId: string, txs: ImportedTx[]): Promise<{ added: number; duplicates: number }>;
+  linkTxInvoice(txId: string, docId: string): Promise<boolean>;
+  linkTxEntry(txId: string, entryId: string): Promise<boolean>;
+  createEntryFromTx(txId: string, template: Entry): Promise<Entry>;
+  markTx(txId: string, type: 'private' | 'transfer' | 'tax' | 'ignored'): Promise<boolean>;
+  unlinkTx(txId: string): Promise<boolean>;
+  addCash(m: { date: string; amount: number; purpose: string; type: 'private' | 'transfer' }): Promise<boolean>;
+  exportBmd(year: number): Promise<string | null>;
+  exportDatev(year: number, meta: { consultant: string; client: string }): Promise<string | null>;
+  exportAccountingPdf(report: AccountingReport, year: number, periodIndex?: number): Promise<string | null>;
 }
 
 export const channels: Record<keyof Api, string> = {
@@ -57,4 +79,24 @@ export const channels: Record<keyof Api, string> = {
   exportBackup: 'backup:export',
   importBackup: 'backup:import',
   showDataFolder: 'app:showDataFolder',
+  saveEntry: 'entry:save',
+  deleteEntry: 'entry:delete',
+  attachReceipt: 'entry:attachReceipt',
+  openReceipt: 'entry:openReceipt',
+  saveAsset: 'asset:save',
+  deleteAsset: 'asset:delete',
+  saveTrip: 'trip:save',
+  deleteTrip: 'trip:delete',
+  saveAccount: 'account:save',
+  deleteAccount: 'account:delete',
+  importBank: 'bank:import',
+  linkTxInvoice: 'bank:linkInvoice',
+  linkTxEntry: 'bank:linkEntry',
+  createEntryFromTx: 'bank:createEntry',
+  markTx: 'bank:mark',
+  unlinkTx: 'bank:unlink',
+  addCash: 'cash:add',
+  exportBmd: 'export:bmd',
+  exportDatev: 'export:datev',
+  exportAccountingPdf: 'export:accountingPdf',
 };

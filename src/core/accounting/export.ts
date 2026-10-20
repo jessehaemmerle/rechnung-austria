@@ -91,7 +91,7 @@ export function buildJournal(db: Database, year: number): JournalLine[] {
     }
     const rc = e.taxCase === 'reverse_charge' || e.taxCase === 'ig_acquisition';
     lines.push({
-      date: e.paidDate, receipt: e.receiptNumber, text: `${e.counterparty} ${e.description}`.trim().slice(0, 60),
+      date: e.paidDate, receipt: e.receiptNumber, text: (e.description.includes(e.counterparty) ? e.description : `${e.counterparty} ${e.description}`).trim().slice(0, 60),
       debit: expenseAccount(acc, e.category), credit: money, amount: e.gross, tax: rc ? a.vat : a.inputTax, rate: e.vatRate,
       taxKind: rc ? (e.taxCase === 'reverse_charge' ? 'rc' : 'ige') : a.inputTax ? 'vst' : 'none', symbol,
     });

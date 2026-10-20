@@ -118,6 +118,32 @@ export function Settings({ db, reload, notify }: PageProps) {
       </section>
 
       <section className="panel">
+        <h2>Buchhaltung</h2>
+        <div className="grid">
+          <Field label="UVA-Zeitraum" hint="Monatlich ab 100.000 € Vorjahresumsatz">
+            <select value={s.vatPeriod} onChange={(e) => set({ vatPeriod: e.target.value as CompanySettings['vatPeriod'] })}>
+              <option value="quarterly">Vierteljährlich</option><option value="monthly">Monatlich</option>
+            </select>
+          </Field>
+          <Field label="Besteuerung" hint="Ist: nach Zahlungseingang (Freiberufler, Umsatz bis 110.000 €)">
+            <select value={s.taxationBasis} onChange={(e) => set({ taxationBasis: e.target.value as CompanySettings['taxationBasis'] })}>
+              <option value="ist">Ist-Besteuerung</option><option value="soll">Soll-Besteuerung</option>
+            </select>
+          </Field>
+          <Field label="Kilometergeld (€/km)"><MoneyInput value={s.kmRate} onChange={(c) => set({ kmRate: c })} /></Field>
+          <label className="check field"><input type="checkbox" checked={s.svsInsured} onChange={(e) => set({ svsInsured: e.target.checked })} /> Pflichtversichert bei der SVS (GSVG)</label>
+        </div>
+        <details>
+          <summary>Sachkonten für BMD/DATEV (EKR)</summary>
+          <div className="grid">
+            {([['bank', 'Bank'], ['cash', 'Kassa'], ['revenue20', 'Erlöse 20 %'], ['revenue13', 'Erlöse 13 %'], ['revenue10', 'Erlöse 10 %'], ['revenueExempt', 'Erlöse steuerfrei/KU'], ['revenueReverseCharge', 'Erlöse EU Reverse Charge'], ['revenueIgDelivery', 'Erlöse ig. Lieferung']] as const).map(([k, label]) => (
+              <Field key={k} label={label}><input value={s.accounts[k]} onChange={(e) => set({ accounts: { ...s.accounts, [k]: e.target.value.replace(/\D/g, '') } })} /></Field>
+            ))}
+          </div>
+        </details>
+      </section>
+
+      <section className="panel">
         <h2>Mahnwesen</h2>
         <div className="grid">
           <Field label="Basiszinssatz OeNB (%)" hint="Verzugszinsen B2B = Basiszinssatz + 9,2 %; Privat 4 %">
@@ -146,7 +172,8 @@ export function Settings({ db, reload, notify }: PageProps) {
       <section className="panel">
         <h2>Daten und Sicherung</h2>
         <p className="muted">
-          Rechnungen sind 7 Jahre aufzubewahren (§ 132 BAO). Die App legt täglich automatisch ein Backup an; exportieren Sie zusätzlich regelmäßig auf ein externes Medium.
+          Rechnungen und Belege sind 7 Jahre aufzubewahren (§ 132 BAO). Die App legt täglich automatisch ein Backup an. Die Sicherungsdatei enthält alle Daten, aber nicht die Belegdateien –
+          sichern Sie dafür regelmäßig den gesamten Datenordner (inkl. Ordner „belege“) auf ein externes Medium.
         </p>
         {info && <p className="muted">Datendatei: {info.dataFile} · Version {info.version}</p>}
         <div className="bar">
