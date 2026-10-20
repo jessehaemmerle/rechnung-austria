@@ -12,13 +12,23 @@ import { renderAssetsHtml, renderCashBookHtml, renderEarHtml, renderTripsHtml, r
 import { periodsOfYear } from '../core/accounting/vat';
 import type { Asset, BankAccount, Database, Entry, Receipt, Trip } from '../core/types';
 import type { AccountingReport } from '../preload/api';
+import { validateDatabase } from '../core/defaults';
 import { htmlToPdf } from './pdf';
 import type { Store } from './store';
 
 type Handle = (channel: string, fn: (...args: any[]) => unknown) => void;
 
 const MAX_RECEIPT_BYTES = 25 * 1024 * 1024;
-const RECEIPT_EXT = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic', '.xml']);
+// Keine XML-Dateien: würden vom Betriebssystem ggf. im Browser mit aktiven Inhalten geöffnet
+const RECEIPT_EXT = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic']);
+
+/** Prüft eine Buchung aus der Oberfläche mit denselben Regeln wie den Datenimport. */
+function validEntry(raw: Entry, db: Database): Entry {
+  const existing = db.entries.find((e) => e.id === raw.id);
+  const entry: Entry = { ...raw, receipts: existing?.receipts ?? [] };
+  validateDatabase({ ...db, entries: [entry] });
+  return entry;
+}
 
 function validTxs(raw: unknown): ImportedTx[] {
   if (!Array.isArray(raw) || raw.length > 20_000) throw new Error('Ungültige Importdaten.');
@@ -41,7 +51,7 @@ export function registerAccountingIpc(handle: Handle, store: Store, win: () => B
   };
 
   handle('entry:save', (e: Entry) => mutate((db) => {
-    const r = saveEntry(db, e);
+    const r = saveEntry(db, validEntry(e, db));
     return { db: r.db, result: r.entry };
   }));
   handle('entry:delete', (id: string) => mutate((db) => ({ db: deleteEntry(db, id), result: true })));
@@ -52,11 +62,12 @@ export function registerAccountingIpc(handle: Handle, store: Store, win: () => B
     if (!entry) throw new Error('Buchung nicht gefunden – bitte zuerst speichern.');
     const res = await dialog.showOpenDialog(win()!, {
       title: 'Beleg auswählen',
-      filters: [{ name: 'Belege', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'heic', 'xml'] }],
+      filters: [{ name: 'Belege', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'heic'] }],
       properties: ['openFile', 'multiSelections'],
     });
     if (res.canceled || !res.filePaths.length) return false;
-    const year = (entry.date || new Date().toISOString()).slice(0, 4);
+    const y = entry.date.slice(0, 4);
+    const year = /^\d{4}$/.test(y) ? y : new Date().toISOString().slice(0, 4);
     const dir = path.join(store.dataDir, 'belege', year);
     fs.mkdirSync(dir, { recursive: true });
     const receipts: Receipt[] = res.filePaths.map((src) => {
@@ -100,7 +111,7 @@ export function registerAccountingIpc(handle: Handle, store: Store, win: () => B
   handle('bank:linkInvoice', (txId: string, docId: string) => mutate((db) => ({ db: linkToInvoice(db, txId, docId), result: true })));
   handle('bank:linkEntry', (txId: string, entryId: string) => mutate((db) => ({ db: linkToEntry(db, txId, entryId), result: true })));
   handle('bank:createEntry', (txId: string, template: Entry) => mutate((db) => {
-    const r = entryFromTransaction(db, txId, template);
+    const r = entryFromTransaction(db, txId, validEntry({ ...template, id: '', gross: Math.max(1, template.gross || 1) }, db));
     return { db: r.db, result: r.entry };
   }));
   handle('bank:mark', (txId: string, type: 'private' | 'transfer' | 'tax' | 'ignored') => mutate((db) => ({ db: markTransaction(db, txId, type), result: true })));

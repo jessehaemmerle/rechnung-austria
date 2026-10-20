@@ -139,7 +139,9 @@ const unescapeXml = (s: string) =>
 
 /** SEPA-Kontoauszug camt.053 (ISO 20022) */
 export function parseCamt053(xml: string): ImportedTx[] {
+  if (xml.length > 10_000_000) throw new Error('Datei zu groß.');
   const entries = xml.match(/<(?:\w+:)?Ntry>[\s\S]*?<\/(?:\w+:)?Ntry>/g) ?? [];
+  if (entries.length > 20_000) throw new Error('Zu viele Buchungen in einer Datei.');
   return entries.map((n) => {
     const amount = parseAmount(tag(n, 'Amt'));
     const credit = tag(n, 'CdtDbtInd') === 'CRDT';

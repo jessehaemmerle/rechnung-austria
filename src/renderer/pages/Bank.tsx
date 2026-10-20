@@ -56,6 +56,7 @@ export function Bank({ db, reload, notify }: PageProps) {
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return notify('Die Datei ist größer als 5 MB. Bitte den Auszug in kleineren Zeiträumen exportieren.', 'error');
     const text = await file.text();
     try {
       if (/<(\w+:)?BkToCstmrStmt/.test(text)) {

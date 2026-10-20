@@ -145,6 +145,12 @@ const DATEV_BU: Record<TaxKind, Record<number, string>> = {
   none: {},
 };
 
+/** Textfeld für DATEV: keine Trennzeichen/Zeilenumbrüche, Formeln für Tabellenkalkulationen entschärft */
+function datevText(v: string, max: number): string {
+  const s = v.replace(/["\r\n;]/g, ' ').slice(0, max);
+  return /^[=+\-@\t]/.test(s) ? `'${s}`.slice(0, max) : s;
+}
+
 /** DATEV-Format "Buchungsstapel" (EXTF, Version 700) */
 export function datevCsv(lines: JournalLine[], year: number, meta: { consultant: string; client: string; name: string }): string {
   const now = new Date();
@@ -155,8 +161,8 @@ export function datevCsv(lines: JournalLine[], year: number, meta: { consultant:
   ].join(';');
   const cols = ['Umsatz (ohne Soll/Haben-Kz)', 'Soll/Haben-Kennzeichen', 'WKZ Umsatz', 'Kurs', 'Basis-Umsatz', 'WKZ Basis-Umsatz', 'Konto', 'Gegenkonto (ohne BU-Schlüssel)', 'BU-Schlüssel', 'Belegdatum', 'Belegfeld 1', 'Belegfeld 2', 'Skonto', 'Buchungstext'];
   const rows = lines.map((l) =>
-    [de(l.amount), 'S', 'EUR', '', '', '', l.debit, l.credit, DATEV_BU[l.taxKind][l.rate] ?? '', `${l.date.slice(8, 10)}${l.date.slice(5, 7)}`, l.receipt.slice(0, 36), '', '', l.text.slice(0, 60)]
-      .map((v, i) => (i >= 9 && i !== 12 ? `"${String(v).replace(/"/g, '')}"` : v))
+    [de(l.amount), 'S', 'EUR', '', '', '', l.debit, l.credit, DATEV_BU[l.taxKind][l.rate] ?? '', `${l.date.slice(8, 10)}${l.date.slice(5, 7)}`, datevText(l.receipt, 36), '', '', datevText(l.text, 60)]
+      .map((v, i) => (i >= 9 && i !== 12 ? `"${v}"` : v))
       .join(';'),
   );
   return [header, cols.join(';'), ...rows].join('\r\n') + '\r\n';
