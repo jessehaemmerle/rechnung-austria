@@ -1,4 +1,6 @@
 import type { CompanySettings, Database } from './types';
+import { DEFAULT_ACCOUNTS } from './accounting/export';
+import { DEFAULT_KM_RATE } from './accounting/trips';
 
 export const DEFAULT_SETTINGS: CompanySettings = {
   name: '',
@@ -26,6 +28,11 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   dunningDays: [7, 10, 10],
   defaultLanguage: 'de',
   footerNote: '',
+  vatPeriod: 'quarterly',
+  taxationBasis: 'ist',
+  kmRate: DEFAULT_KM_RATE,
+  svsInsured: true,
+  accounts: DEFAULT_ACCOUNTS,
 };
 
 export function emptyDatabase(): Database {
@@ -36,6 +43,11 @@ export function emptyDatabase(): Database {
     articles: [],
     documents: [],
     counters: {},
+    entries: [],
+    assets: [],
+    bankAccounts: [],
+    bankTransactions: [],
+    trips: [],
   };
 }
 
@@ -45,11 +57,21 @@ export function migrateDatabase(raw: unknown): Database {
   const base = emptyDatabase();
   return {
     version: 1,
-    settings: { ...base.settings, ...(db.settings ?? {}), address: { ...base.settings.address, ...(db.settings?.address ?? {}) } },
+    settings: {
+      ...base.settings,
+      ...(db.settings ?? {}),
+      address: { ...base.settings.address, ...(db.settings?.address ?? {}) },
+      accounts: { ...base.settings.accounts, ...(db.settings?.accounts ?? {}), expense: { ...(db.settings?.accounts?.expense ?? {}) } },
+    },
     customers: db.customers ?? [],
     articles: db.articles ?? [],
     documents: db.documents ?? [],
     counters: db.counters ?? {},
+    entries: db.entries ?? [],
+    assets: db.assets ?? [],
+    bankAccounts: db.bankAccounts ?? [],
+    bankTransactions: db.bankTransactions ?? [],
+    trips: db.trips ?? [],
   };
 }
 
@@ -92,5 +114,29 @@ export function validateDatabase(db: Database): Database {
     for (const r of d.dunning) { int(r.fee, `${w}: Mahnung`); int(r.interest, `${w}: Mahnung`); date(r.date, w); date(r.dueDate, w); }
   }
   for (const v of Object.values(db.counters)) int(v, 'Nummernkreis');
+
+  for (const e of db.entries) {
+    const w = `Buchung ${e.receiptNumber || e.id}`;
+    if (!['expense', 'income'].includes(e.kind) || !['domestic', 'reverse_charge', 'ig_acquisition', 'none'].includes(e.taxCase) || !RATES.has(e.vatRate)) fail(w);
+    int(e.gross, w);
+    date(e.date, w);
+    date(e.paidDate ?? '', w);
+    str(e.category, w);
+    str(e.description, w);
+    if (!Array.isArray(e.receipts)) fail(w);
+    // Belegpfade dürfen nur in den Belegordner zeigen
+    for (const r of e.receipts) if (typeof r.path !== 'string' || !/^belege\/\d{4}\/[\w-]+\.(pdf|png|jpe?g|webp|heic|xml)$/i.test(r.path)) fail(`${w}: Beleg`);
+  }
+  for (const a of db.assets) {
+    int(a.cost, `Anlage ${a.name}`);
+    int(a.disposalProceeds, `Anlage ${a.name}`);
+    date(a.acquisitionDate, `Anlage ${a.name}`);
+    date(a.inServiceDate, `Anlage ${a.name}`);
+    date(a.disposalDate, `Anlage ${a.name}`);
+    if (!Number.isFinite(a.usefulLifeYears) || !Number.isFinite(a.businessUsePercent)) fail(`Anlage ${a.name}`);
+  }
+  for (const a of db.bankAccounts) { int(a.openingBalance, `Konto ${a.name}`); date(a.openingDate, `Konto ${a.name}`); }
+  for (const t of db.bankTransactions) { int(t.amount, 'Bankbewegung'); date(t.date, 'Bankbewegung'); str(t.purpose, 'Bankbewegung'); }
+  for (const t of db.trips) { date(t.date, 'Fahrt'); if (!Number.isFinite(t.km)) fail('Fahrt'); int(t.rate, 'Fahrt'); }
   return db;
 }

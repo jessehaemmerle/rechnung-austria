@@ -54,6 +54,29 @@ export interface CompanySettings {
   dunningDays: [number, number, number];
   defaultLanguage: Language;
   footerNote: string;
+  /** Buchhaltung */
+  vatPeriod: 'monthly' | 'quarterly';
+  /** Ist-Besteuerung (nach Zahlung) oder Soll-Besteuerung (nach Rechnungsdatum) */
+  taxationBasis: 'ist' | 'soll';
+  /** Amtliches Kilometergeld in Cent je km */
+  kmRate: Cents;
+  /** Für die SVS-/ESt-Schätzung */
+  svsInsured: boolean;
+  /** Sachkonten für BMD-/DATEV-Export (Kontenrahmen EKR) */
+  accounts: AccountMapping;
+}
+
+export interface AccountMapping {
+  bank: string;
+  cash: string;
+  revenue20: string;
+  revenue13: string;
+  revenue10: string;
+  revenueExempt: string;
+  revenueReverseCharge: string;
+  revenueIgDelivery: string;
+  /** Konto je Ausgabenkategorie (Schlüssel = Kategorie-ID) */
+  expense: Record<string, string>;
 }
 
 export interface Customer {
@@ -148,6 +171,115 @@ export interface NumberCounters {
   [key: string]: number;
 }
 
+/**
+ * Steuerfall einer Eingangsrechnung:
+ * - domestic: Inland mit ausgewiesener Vorsteuer
+ * - reverse_charge: Leistung aus dem EU-Ausland mit Übergang der Steuerschuld (z. B. Software-Abos)
+ * - ig_acquisition: innergemeinschaftlicher Erwerb von Waren
+ * - none: keine USt (z. B. Kleinunternehmer-Lieferant, Versicherung, Gebühren)
+ */
+export type InputTaxCase = 'domestic' | 'reverse_charge' | 'ig_acquisition' | 'none';
+
+export interface Receipt {
+  /** Pfad relativ zum Datenordner, z. B. belege/2026/<id>.pdf */
+  path: string;
+  originalName: string;
+  sha256: string;
+  size: number;
+  addedAt: string;
+}
+
+/** Ausgabe oder sonstige Einnahme ohne Ausgangsrechnung (E/A-Rechnung) */
+export interface Entry {
+  id: string;
+  kind: 'expense' | 'income';
+  /** Belegdatum */
+  date: string;
+  /** Zahlungsdatum (Zu-/Abfluss); leer = noch nicht bezahlt */
+  paidDate: string;
+  /** Bezahlt über Bank oder Kassa */
+  paidVia: 'bank' | 'cash' | '';
+  description: string;
+  counterparty: string;
+  receiptNumber: string;
+  category: string;
+  /** Bruttobetrag lt. Beleg */
+  gross: Cents;
+  vatRate: VatRate;
+  taxCase: InputTaxCase;
+  /** Vorsteuerabzug zulässig (z. B. nicht bei PKW) */
+  inputTaxDeductible: boolean;
+  receipts: Receipt[];
+  /** Verknüpfte Bankbewegung */
+  bankTransactionId?: string;
+  /** Bei Kategorie "Anlagegut": erzeugtes Wirtschaftsgut */
+  assetId?: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  acquisitionDate: string;
+  /** Datum der Inbetriebnahme (maßgeblich für Halbjahres-AfA) */
+  inServiceDate: string;
+  /** Anschaffungskosten (netto bei Vorsteuerabzug, sonst brutto) */
+  cost: Cents;
+  usefulLifeYears: number;
+  /** Geringwertiges Wirtschaftsgut – Sofortabschreibung */
+  lowValue: boolean;
+  disposalDate: string;
+  disposalProceeds: Cents;
+  /** Anteil der betrieblichen Nutzung in Prozent */
+  businessUsePercent: number;
+  entryId?: string;
+  notes: string;
+}
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  kind: 'bank' | 'cash';
+  iban: string;
+  openingBalance: Cents;
+  openingDate: string;
+}
+
+export type BankTxLink =
+  | { type: 'invoice'; documentId: string; paymentId: string }
+  | { type: 'entry'; entryId: string }
+  | { type: 'private' }
+  | { type: 'transfer' }
+  | { type: 'tax' }
+  | { type: 'ignored' };
+
+export interface BankTransaction {
+  id: string;
+  accountId: string;
+  date: string;
+  amount: Cents;
+  counterparty: string;
+  counterpartyIban: string;
+  purpose: string;
+  reference: string;
+  /** Prüfwert gegen Doppelimporte */
+  hash: string;
+  link?: BankTxLink;
+  importedAt: string;
+}
+
+export interface Trip {
+  id: string;
+  date: string;
+  from: string;
+  to: string;
+  purpose: string;
+  km: number;
+  /** Kilometergeld zum Zeitpunkt der Fahrt (Cent/km) */
+  rate: Cents;
+}
+
 export interface Database {
   version: 1;
   settings: CompanySettings;
@@ -155,4 +287,9 @@ export interface Database {
   articles: Article[];
   documents: BusinessDocument[];
   counters: NumberCounters;
+  entries: Entry[];
+  assets: Asset[];
+  bankAccounts: BankAccount[];
+  bankTransactions: BankTransaction[];
+  trips: Trip[];
 }
