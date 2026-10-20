@@ -1,7 +1,7 @@
 # Rechnung Austria
 
-Desktop-App (Electron) für Angebote und Rechnungen von österreichischen Ein-Personen-Unternehmen.
-Alle Daten bleiben lokal auf Ihrem Rechner.
+Desktop-App (Electron) für Angebote, Rechnungen und die Buchhaltung (Einnahmen-Ausgaben-Rechnung)
+von österreichischen Ein-Personen-Unternehmen. Alle Daten bleiben lokal auf Ihrem Rechner.
 
 ## Funktionen
 
@@ -17,6 +17,21 @@ Alle Daten bleiben lokal auf Ihrem Rechner.
 - **Export**: PDF, ebInterface 6.1 (E-Rechnung an den Bund), XRechnung (UBL, EN 16931), ZUGFeRD/Factur-X (PDF mit eingebettetem XML)
 - **Auswertungen**: Umsatz je Monat, Aufteilung nach Steuersätzen und Reverse Charge, CSV-Export für die Steuerberatung
 - Deutsch und Englisch je Kunde, Leistungskatalog, Logo, tägliche automatische Backups, Sicherung exportieren und wiederherstellen
+
+## Buchhaltung (E/A-Rechnung nach § 4 Abs 3 EStG)
+
+- **Bank & Kassa**: Kontoauszüge importieren aus George (Erste/Sparkasse), Raiffeisen ELBA, beliebigem CSV mit Spaltenzuordnung oder camt.053 (XML). Doppelimporte werden erkannt.
+  Eingänge werden offenen Rechnungen automatisch vorgeschlagen (Rechnungsnummer, Betrag, Kunde); Abbuchungen lassen sich mit einem Klick als Ausgabe buchen oder als Privat/Finanzamt/Umbuchung markieren.
+  Das Kassabuch entsteht automatisch aus Barbuchungen und warnt bei negativem Kassastand.
+- **Ausgaben & Belege**: Eingangsrechnungen mit Kategorie (E1a-Kennzahl), Vorsteuer, Reverse Charge (z. B. Software-Abos aus der EU), ig. Erwerb und Geschäftsessen (50 %).
+  Belege (PDF/Fotos) werden mit SHA-256-Prüfsumme in den Datenordner kopiert; Buchungen mit Beleg können nicht gelöscht werden.
+- **Anlagenverzeichnis**: lineare AfA mit Halbjahresregel, GWG bis 1.000 € netto als Sofortabschreibung, Privatanteil, Ausscheiden mit Restbuchwert.
+- **Fahrtenbuch**: Dienstfahrten mit amtlichem Kilometergeld (0,50 €/km), automatisch auf 30.000 km pro Jahr begrenzt.
+- **Steuern**:
+  - Umsatzsteuervoranmeldung mit U30-Kennzahlen, monatlich oder vierteljährlich, Soll- oder Ist-Besteuerung, Fälligkeiten; EU-Leistungen getrennt für die Zusammenfassende Meldung
+  - Einnahmen-Ausgaben-Rechnung mit Summen je E1a-Kennzahl und Grundfreibetrag
+  - Schätzung von Einkommensteuer und SVS-Beiträgen als Rücklagenempfehlung
+- **Export für die Steuerberatung**: Buchungsjournal als BMD-Import-CSV und DATEV-Buchungsstapel (EXTF), Kontenrahmen EKR (Konten einstellbar), PDFs für UVA, E/A-Rechnung, Anlagenverzeichnis, Fahrtenbuch und Kassabuch.
 
 ## Installation und Start
 
@@ -48,6 +63,7 @@ Regelbesteuerung, Kleinunternehmer, Reverse Charge, innergemeinschaftliche Liefe
 
 ```
 src/core/       Fachlogik ohne UI (Steuer, § 11-Prüfung, Nummern, Mahnwesen, Druckvorlage, E-Rechnung)
+src/core/accounting/  E/A-Rechnung, UVA, AfA, Bankimport, Fahrtenbuch, BMD/DATEV-Export
 src/main/       Electron-Hauptprozess: Speicherung, PDF-Erzeugung, Dateidialoge
 src/preload/    Schnittstelle zwischen Oberfläche und Hauptprozess
 src/renderer/   React-Oberfläche
@@ -62,7 +78,10 @@ tests/          Vitest-Tests
 - Die UID-Prüfung prüft nur das Format; die Stufe-2-Abfrage über FinanzOnline/MIAS bleibt Ihre Aufgabe.
 - ZUGFeRD-PDFs enthalten das Factur-X-XML und die XMP-Metadaten. Chromium erzeugt aber kein zertifiziertes PDF/A-3. Wenn ein Empfänger streng auf PDF/A-3 prüft, schicken Sie zusätzlich die XRechnung oder ebInterface.
 - E-Rechnungen von Kleinunternehmern ohne UID brauchen eine Steuernummer in den Einstellungen.
-- Aufbewahrungspflicht: 7 Jahre (§ 132 BAO). Exportieren Sie Sicherungen regelmäßig auf ein externes Medium.
+- Aufbewahrungspflicht: 7 Jahre (§ 132 BAO). Die Sicherungsdatei enthält keine Belegdateien – sichern Sie den gesamten Datenordner inkl. `belege/` regelmäßig auf ein externes Medium.
+- Buchhaltung: E1a-Kennzahlen, EKR-Konten, BMD-Steuercodes und DATEV-BU-Schlüssel sind übliche Vorgaben und sollten einmal mit der Steuerberatung abgestimmt werden.
+  Steuertarif (2025/2026) und SVS-Werte (2025) sind hinterlegt und jährlich zu aktualisieren; die Schätzung ersetzt keinen Steuerbescheid.
+- Nicht abgebildet: doppelte Buchhaltung/Bilanz, Lohnverrechnung, Basispauschalierung, Investitionsfreibetrag und die 15-Tage-Regel für regelmäßig wiederkehrende Zahlungen um den Jahreswechsel.
 
 ## Lizenz
 
